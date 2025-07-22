@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use directory_scanner::{
     analyze_directory_with_progress, format_tree_output, scan_directory_tree_with_progress,
-    DirectoryScanner, FileInfo, ProgressCallback,
+    DirectoryScanner, FileInfo, ProgressCallback, TreeNode,
 };
 
 pub fn run() -> iced::Result {
@@ -113,6 +113,7 @@ impl Default for ScanPreset {
 #[derive(Debug, Clone, Default)]
 struct ScanResults {
     detailed_files: Vec<FileInfo>,
+    tree_node: Option<TreeNode>,
     tree_output: String,
     analysis_output: String,
     scan_time: Option<f32>,
@@ -568,34 +569,135 @@ fn view_detailed_results(state: &SplendirGui) -> Element<Message> {
 }
 
 fn view_tree_results(state: &SplendirGui) -> Element<Message> {
-    if state.scan_results.tree_output.is_empty() {
-        return text("No tree data available").into();
+    if let Some(ref tree_node) = state.scan_results.tree_node {
+        // Flatten tree to calculate visible nodes
+        let flattened = flatten_tree(tree_node, 0);
+        let total_nodes = flattened.len();
+        
+        column![
+            text(format!("Tree view ({} nodes)", total_nodes)).size(14),
+            view_tree_efficient(flattened, state.colorize_output)
+        ]
+        .spacing(10)
+        .into()
+    } else if !state.scan_results.tree_output.is_empty() {
+        // Fallback to text output if tree node is not available
+        column![
+            text("Tree view (text mode)").size(14),
+            scrollable(
+                text(&state.scan_results.tree_output)
+                    .size(14)
+                    .font(Font::MONOSPACE)
+            )
+            .height(Length::Fill)
+        ]
+        .spacing(10)
+        .into()
+    } else {
+        text("No tree data available").into()
+    }
+}
+
+// Flatten tree structure for efficient rendering
+#[derive(Clone)]
+struct FlatTreeNode {
+    name: String,
+    depth: usize,
+    is_directory: bool,
+    is_last: bool,
+}
+
+fn flatten_tree(node: &TreeNode, depth: usize) -> Vec<FlatTreeNode> {
+    let mut result = Vec::new();
+    
+    // Add current node
+    result.push(FlatTreeNode {
+        name: node.name.clone(),
+        depth,
+        is_directory: node.is_directory,
+        is_last: false,
+    });
+    
+    // Add children
+    for (i, child) in node.children.iter().enumerate() {
+        let is_last = i == node.children.len() - 1;
+        let mut child_nodes = flatten_tree_recursive(child, depth + 1, is_last);
+        result.append(&mut child_nodes);
     }
     
-    // Limit tree output for performance
-    const MAX_TREE_CHARS: usize = 100_000;
-    let display_output = if state.scan_results.tree_output.len() > MAX_TREE_CHARS {
-        format!(
-            "{}...\n\n[Tree output truncated - {} total characters. Export to file for complete output.]",
-            &state.scan_results.tree_output[..MAX_TREE_CHARS],
-            state.scan_results.tree_output.len()
-        )
-    } else {
-        state.scan_results.tree_output.clone()
-    };
+    result
+}
+
+fn flatten_tree_recursive(node: &TreeNode, depth: usize, is_last: bool) -> Vec<FlatTreeNode> {
+    let mut result = Vec::new();
     
-    column![
-        text(format!("Tree output ({} characters)", state.scan_results.tree_output.len()))
-            .size(14),
-        scrollable(
-            text(display_output)
+    // Add current node
+    result.push(FlatTreeNode {
+        name: node.name.clone(),
+        depth,
+        is_directory: node.is_directory,
+        is_last,
+    });
+    
+    // Add children
+    for (i, child) in node.children.iter().enumerate() {
+        let child_is_last = i == node.children.len() - 1;
+        let mut child_nodes = flatten_tree_recursive(child, depth + 1, child_is_last);
+        result.append(&mut child_nodes);
+    }
+    
+    result
+}
+
+fn view_tree_efficient(flattened: Vec<FlatTreeNode>, colorize: bool) -> Element<'static, Message> {
+    const MAX_VISIBLE_NODES: usize = 1000;
+    
+    let total_nodes = flattened.len();
+    
+    // Only render a subset of nodes for performance
+    let visible_nodes: Vec<_> = flattened.into_iter()
+        .take(MAX_VISIBLE_NODES)
+        .collect();
+    
+    let mut tree_column = Column::new().spacing(0);
+    
+    for node in visible_nodes {
+        let indent = "  ".repeat(node.depth);
+        let prefix = if node.is_last { "└─ " } else { "├─ " };
+        
+        let node_text = if colorize && node.is_directory {
+            format!("{}{}📁 {}", indent, prefix, node.name)
+        } else if colorize {
+            format!("{}{}📄 {}", indent, prefix, node.name)
+        } else {
+            format!("{}{}{}", indent, prefix, node.name)
+        };
+        
+        tree_column = tree_column.push(
+            text(node_text)
                 .size(14)
                 .font(Font::MONOSPACE)
-        )
-        .height(Length::Fill)
-    ]
-    .spacing(10)
-    .into()
+        );
+    }
+    
+    let content = scrollable(tree_column).height(Length::Fill);
+    
+    if total_nodes > MAX_VISIBLE_NODES {
+        column![
+            content,
+            text(format!(
+                "Showing first {} of {} nodes. Export for complete tree.",
+                MAX_VISIBLE_NODES,
+                total_nodes
+            ))
+            .size(14)
+            .color(iced::Color::from_rgb(0.8, 0.6, 0.2))
+        ]
+        .spacing(10)
+        .into()
+    } else {
+        content.into()
+    }
 }
 
 fn view_analysis_results(state: &SplendirGui) -> Element<Message> {
@@ -641,6 +743,7 @@ async fn perform_scan_with_progress(
                 match scan_directory_tree_with_progress(&path, progress_callback) {
                     Ok(tree) => {
                         results.tree_output = format_tree_output(&tree, colorize);
+                        results.tree_node = Some(tree);
                     }
                     Err(e) => return Err(format!("Tree scan failed: {}", e)),
                 }
@@ -717,7 +820,17 @@ async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode) -> 
             }
             ScanMode::Tree => {
                 // Export tree as text
-                write!(file, "{}", results.tree_output)
+                // Use the formatted output if available, otherwise format the tree node
+                let tree_text = if !results.tree_output.is_empty() {
+                    results.tree_output
+                } else if let Some(ref tree_node) = results.tree_node {
+                    // Format tree without colorization for export
+                    format_tree_output(tree_node, false)
+                } else {
+                    String::from("No tree data available")
+                };
+                
+                write!(file, "{}", tree_text)
                     .map_err(|e| format!("Failed to write tree: {}", e))?;
             }
             ScanMode::Analysis => {
