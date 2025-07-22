@@ -20,8 +20,8 @@ This is a work in progress. Releases and/or binaries might be found in the Relea
 
 ### Usage (GUI)
 
-![Splendir Directory Listing View][assets/sds-view1.png]
-![Splendir Tree Listing View][assets/sds-view2.png]
+![Splendir Directory Listing View](assets/sds-view1.png)
+![Splendir Tree Listing View](assets/sds-view2.png)
 
 ### Usage (CLI)
 
