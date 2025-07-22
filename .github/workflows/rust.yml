@@ -35,3 +35,9 @@ jobs:
     - name: Build with cargo
       run: cargo build --release
 
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: splendir-cli
+        path: target/release/splendir
+        name: target/release/splendir_gui
