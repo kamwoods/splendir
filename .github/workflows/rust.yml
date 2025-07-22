@@ -38,6 +38,8 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: splendir-cli
+      - name: splendir
         path: target/release/splendir
+
+      - name: splendir_gui
         name: target/release/splendir_gui
