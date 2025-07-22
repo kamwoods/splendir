@@ -1,4 +1,8 @@
-## Splendir: A Directory Scanner and Printer
+![Logo](https://github.com/kamwoods/splendir/blob/main/assets/splendir-logo-150.png)
+
+## Splendir
+
+### A Directory Scanner and Printer
 
 ### Splendir is WIP. There are no releases at this time. Approach with caution and assume features are missing or broken.
 
