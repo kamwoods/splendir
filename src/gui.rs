@@ -137,6 +137,10 @@ enum Message {
     UpdateProgress,
     ScanComplete(ScanResults),
     ScanError(String),
+    
+    // Export Events
+    ExportResults,
+    ExportComplete(Result<String, String>),
 }
 
 fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
@@ -269,6 +273,44 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             state.error_message = Some(error);
             state.scan_status = "Scan failed".to_string();
             state.progress_state = None;
+        }
+        Message::ExportResults => {
+            if state.scan_results.detailed_files.is_empty() 
+                && state.scan_results.tree_output.is_empty() 
+                && state.scan_results.analysis_output.is_empty() {
+                state.error_message = Some("No results to export".to_string());
+                return Task::none();
+            }
+            
+            let results = state.scan_results.clone();
+            let mode = state.scan_mode.clone();
+            
+            return Task::perform(
+                async move {
+                    let file_dialog = FileDialog::new()
+                        .set_title("Export Scan Results")
+                        .add_filter("Text files", &["txt"])
+                        .add_filter("CSV files", &["csv"])
+                        .save_file();
+                    
+                    if let Some(path) = file_dialog {
+                        export_results(path, results, mode).await
+                    } else {
+                        Err("Export cancelled".to_string())
+                    }
+                },
+                Message::ExportComplete,
+            );
+        }
+        Message::ExportComplete(result) => {
+            match result {
+                Ok(path) => {
+                    state.scan_status = format!("Results exported to: {}", path);
+                }
+                Err(error) => {
+                    state.error_message = Some(format!("Export failed: {}", error));
+                }
+            }
         }
     }
     
@@ -429,7 +471,14 @@ fn view_results(state: &SplendirGui) -> Element<Message> {
         .into();
     }
     
-    let status = text(&state.scan_status).size(16);
+    let status_row = row![
+        text(&state.scan_status).size(16),
+        horizontal_space(),
+        button("Export Results")
+            .on_press(Message::ExportResults)
+            .padding([8, 16]),
+    ]
+    .align_y(Alignment::Center);
     
     let results_content = match state.scan_mode {
         ScanMode::Detailed => view_detailed_results(state),
@@ -438,7 +487,7 @@ fn view_results(state: &SplendirGui) -> Element<Message> {
     };
     
     column![
-        status,
+        status_row,
         container(results_content)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -452,6 +501,9 @@ fn view_detailed_results(state: &SplendirGui) -> Element<Message> {
         return text("No files found").into();
     }
     
+    let total_files = state.scan_results.detailed_files.len();
+    let file_count_text = text(format!("Total files: {}", total_files)).size(14);
+    
     let header = row![
         text("Name").width(Length::FillPortion(3)),
         text("Size").width(Length::FillPortion(1)),
@@ -461,9 +513,17 @@ fn view_detailed_results(state: &SplendirGui) -> Element<Message> {
     .spacing(10)
     .padding([10, 0]);
     
-    let mut file_rows = Column::new().spacing(5);
+    // Limit displayed files to improve performance
+    const MAX_DISPLAYED_FILES: usize = 1000;
+    let displayed_files = if state.scan_results.detailed_files.len() > MAX_DISPLAYED_FILES {
+        &state.scan_results.detailed_files[..MAX_DISPLAYED_FILES]
+    } else {
+        &state.scan_results.detailed_files
+    };
     
-    for file in &state.scan_results.detailed_files {
+    let mut file_rows = Column::new().spacing(2);
+    
+    for file in displayed_files {
         let row = row![
             text(&file.name).width(Length::FillPortion(3)).size(14),
             text(format_size(file.size)).width(Length::FillPortion(1)).size(14),
@@ -475,17 +535,36 @@ fn view_detailed_results(state: &SplendirGui) -> Element<Message> {
             }).width(Length::FillPortion(3)).size(14),
         ]
         .spacing(10)
-        .padding([5, 0]);
+        .padding([2, 0]);
         
         file_rows = file_rows.push(row);
     }
     
-    column![
-        header,
-        scrollable(file_rows)
-            .height(Length::Fill)
-    ]
-    .into()
+    let warning = if state.scan_results.detailed_files.len() > MAX_DISPLAYED_FILES {
+        Some(text(format!(
+            "Showing first {} of {} files. Export to file for complete list.", 
+            MAX_DISPLAYED_FILES, 
+            total_files
+        ))
+        .size(14)
+        .color(iced::Color::from_rgb(0.8, 0.6, 0.2)))
+    } else {
+        None
+    };
+    
+    let mut content = vec![
+        file_count_text.into(),
+        header.into(),
+        scrollable(file_rows).height(Length::Fill).into(),
+    ];
+    
+    if let Some(warning_text) = warning {
+        content.push(warning_text.into());
+    }
+    
+    Column::with_children(content)
+        .spacing(10)
+        .into()
 }
 
 fn view_tree_results(state: &SplendirGui) -> Element<Message> {
@@ -493,12 +572,29 @@ fn view_tree_results(state: &SplendirGui) -> Element<Message> {
         return text("No tree data available").into();
     }
     
-    scrollable(
-        text(&state.scan_results.tree_output)
-            .size(14)
-            .font(Font::MONOSPACE)
-    )
-    .height(Length::Fill)
+    // Limit tree output for performance
+    const MAX_TREE_CHARS: usize = 100_000;
+    let display_output = if state.scan_results.tree_output.len() > MAX_TREE_CHARS {
+        format!(
+            "{}...\n\n[Tree output truncated - {} total characters. Export to file for complete output.]",
+            &state.scan_results.tree_output[..MAX_TREE_CHARS],
+            state.scan_results.tree_output.len()
+        )
+    } else {
+        state.scan_results.tree_output.clone()
+    };
+    
+    column![
+        text(format!("Tree output ({} characters)", state.scan_results.tree_output.len()))
+            .size(14),
+        scrollable(
+            text(display_output)
+                .size(14)
+                .font(Font::MONOSPACE)
+        )
+        .height(Length::Fill)
+    ]
+    .spacing(10)
     .into()
 }
 
@@ -590,4 +686,49 @@ fn format_size(size: u64) -> String {
     }
     
     format!("{:.1} {}", size_f, UNITS[unit_index])
+}
+
+async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode) -> Result<String, String> {
+    use std::fs::File;
+    use std::io::Write;
+    
+    tokio::task::spawn_blocking(move || {
+        let mut file = File::create(&path)
+            .map_err(|e| format!("Failed to create file: {}", e))?;
+        
+        match mode {
+            ScanMode::Detailed => {
+                // Export as CSV for detailed mode
+                writeln!(file, "Name,Full Path,Size (bytes),Last Modified,SHA256")
+                    .map_err(|e| format!("Failed to write header: {}", e))?;
+                
+                for file_info in &results.detailed_files {
+                    writeln!(
+                        file,
+                        "\"{}\",\"{}\",{},\"{}\",\"{}\"",
+                        file_info.name.replace("\"", "\"\""),
+                        file_info.full_path.replace("\"", "\"\""),
+                        file_info.size,
+                        file_info.last_modified,
+                        file_info.sha256
+                    )
+                    .map_err(|e| format!("Failed to write data: {}", e))?;
+                }
+            }
+            ScanMode::Tree => {
+                // Export tree as text
+                write!(file, "{}", results.tree_output)
+                    .map_err(|e| format!("Failed to write tree: {}", e))?;
+            }
+            ScanMode::Analysis => {
+                // Export analysis as text
+                write!(file, "{}", results.analysis_output)
+                    .map_err(|e| format!("Failed to write analysis: {}", e))?;
+            }
+        }
+        
+        Ok(path.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| format!("Export task failed: {}", e))?
 }
