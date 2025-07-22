@@ -1,4 +1,4 @@
-name: Build Splendir
+name: Build
 
 on:
   push:
@@ -35,5 +35,3 @@ jobs:
     - name: Build with cargo
       run: cargo build --release
 
-    - name: Show built binary path
-      run: ls -lh target/release
