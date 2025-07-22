@@ -15,7 +15,7 @@ Splendir is built in Rust and implements a CLI tool, a GUI using Iced, and a reu
 
 ### Install
 
-This is a work in progress. No releases or binaries are provided at this time.
+This is a work in progress. Although releases and/or binaries may exist here, they are not guaranteed to work.
 
 ### Build
 
