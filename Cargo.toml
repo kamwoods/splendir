@@ -1,0 +1,74 @@
+[package]
+name = "splendir"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "A powerful directory scanner with CLI and GUI interfaces"
+license = "MIT"
+repository = "https://github.com/yourusername/splendir"
+readme = "README.md"
+keywords = ["directory", "scanner", "file", "tree", "gui"]
+categories = ["command-line-utilities", "filesystem"]
+
+[dependencies]
+# Core dependencies for directory scanning
+walkdir = "2.5"
+sha2 = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+
+# GUI dependencies (optional)
+iced = { version = "0.13", features = ["tokio", "lazy", "advanced"], optional = true }
+rfd = { version = "0.14", optional = true }
+
+# Async runtime for GUI (optional)
+tokio = { version = "1.39", features = ["full"], optional = true }
+
+# Optional: for better error handling
+anyhow = "1.0"
+
+[dev-dependencies]
+# For testing
+tempfile = "3.10"
+assert_cmd = "2.0"
+predicates = "3.1"
+
+# CLI binary
+[[bin]]
+name = "splendir"
+path = "src/main.rs"
+
+# GUI binary
+[[bin]]
+name = "splendir_gui"
+path = "src/gui_main.rs"
+
+[lib]
+name = "directory_scanner"
+path = "src/lib.rs"
+
+[features]
+default = ["cli", "gui"]
+cli = []
+gui = ["iced", "rfd", "tokio"]
+
+# Build optimizations
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+# Faster builds for development
+[profile.dev]
+opt-level = 0
+debug = true
+
+# Custom profile for GUI builds with better performance
+[profile.gui-release]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
