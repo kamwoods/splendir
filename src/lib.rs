@@ -1,12 +1,13 @@
 use std::path::{Path, PathBuf};
 use std::io;
+use std::sync::Arc;
 
 // Re-export modules for external use
 pub mod scanner;
 pub mod tree;
 
 // Re-export commonly used types and functions for convenience
-pub use scanner::{DirectoryScanner, DirectoryStats, validate_path, process_file, calculate_sha256, format_file_size};
+pub use scanner::{DirectoryScanner, DirectoryStats, validate_path, process_file, calculate_sha256, format_file_size, ProgressCallback};
 pub use tree::{TreeFormatter, TreeFormatOptions, TreeLine, FileType, get_file_color, filter_tree_by_type, count_files_by_type};
 
 // Core data structures
@@ -67,10 +68,28 @@ pub fn scan_directory_detailed(path: &Path) -> Result<Vec<FileInfo>, ScanError> 
     scanner.scan_detailed(path)
 }
 
+/// Scan a directory with progress reporting
+pub fn scan_directory_detailed_with_progress(
+    path: &Path, 
+    progress_callback: ProgressCallback
+) -> Result<Vec<FileInfo>, ScanError> {
+    let scanner = DirectoryScanner::new();
+    scanner.scan_detailed_with_progress(path, Some(progress_callback))
+}
+
 /// Scan a directory and return a tree structure using default settings
 pub fn scan_directory_tree(path: &Path) -> Result<TreeNode, ScanError> {
     let scanner = DirectoryScanner::new();
     scanner.scan_tree(path)
+}
+
+/// Scan a directory tree with progress reporting
+pub fn scan_directory_tree_with_progress(
+    path: &Path,
+    progress_callback: ProgressCallback
+) -> Result<TreeNode, ScanError> {
+    let scanner = DirectoryScanner::new();
+    scanner.scan_tree_with_progress(path, Some(progress_callback))
 }
 
 /// Quick scan without SHA256 calculation for faster results
@@ -79,15 +98,42 @@ pub fn scan_directory_quick(path: &Path) -> Result<Vec<FileInfo>, ScanError> {
     scanner.scan_detailed(path)
 }
 
+/// Quick scan with progress reporting
+pub fn scan_directory_quick_with_progress(
+    path: &Path,
+    progress_callback: ProgressCallback
+) -> Result<Vec<FileInfo>, ScanError> {
+    let scanner = DirectoryScanner::new().calculate_hashes(false);
+    scanner.scan_detailed_with_progress(path, Some(progress_callback))
+}
+
 /// Get directory statistics without full file processing
 pub fn scan_directory_stats(path: &Path) -> Result<DirectoryStats, ScanError> {
     let scanner = DirectoryScanner::new();
     scanner.scan_stats(path)
 }
 
+/// Get directory statistics with progress reporting
+pub fn scan_directory_stats_with_progress(
+    path: &Path,
+    progress_callback: ProgressCallback
+) -> Result<DirectoryStats, ScanError> {
+    let scanner = DirectoryScanner::new();
+    scanner.scan_stats_with_progress(path, Some(progress_callback))
+}
+
 /// Scan with custom scanner configuration
 pub fn scan_with_options(path: &Path, scanner: DirectoryScanner) -> Result<Vec<FileInfo>, ScanError> {
     scanner.scan_detailed(path)
+}
+
+/// Scan with custom scanner configuration and progress reporting
+pub fn scan_with_options_and_progress(
+    path: &Path, 
+    scanner: DirectoryScanner,
+    progress_callback: ProgressCallback
+) -> Result<Vec<FileInfo>, ScanError> {
+    scanner.scan_detailed_with_progress(path, Some(progress_callback))
 }
 
 /// Generate a formatted tree string output using default formatting
@@ -113,6 +159,50 @@ pub fn analyze_directory(path: &Path, include_hidden: bool, max_depth: Option<us
     let stats = scanner.scan_stats(path)?;
     let tree = scanner.scan_tree(path)?;
     let file_type_counts = count_files_by_type(&tree);
+    
+    Ok(DirectoryAnalysis {
+        stats,
+        tree,
+        file_type_counts,
+        path: path.to_path_buf(),
+    })
+}
+
+/// Comprehensive directory analysis with progress reporting
+pub fn analyze_directory_with_progress(
+    path: &Path, 
+    include_hidden: bool, 
+    max_depth: Option<usize>,
+    progress_callback: ProgressCallback
+) -> Result<DirectoryAnalysis, ScanError> {
+    let scanner = DirectoryScanner::new()
+        .include_hidden(include_hidden)
+        .max_depth(max_depth.unwrap_or(50));
+    
+    // For analysis, we'll divide progress into three phases
+    let stats_callback = {
+        let callback = progress_callback.clone();
+        Arc::new(move |p: f32, s: String| {
+            callback(p * 0.33, format!("Phase 1/3: {}", s));
+        })
+    };
+    
+    let tree_callback = {
+        let callback = progress_callback.clone();
+        Arc::new(move |p: f32, s: String| {
+            callback(0.33 + p * 0.33, format!("Phase 2/3: {}", s));
+        })
+    };
+    
+    progress_callback(0.0, "Starting analysis...".to_string());
+    
+    let stats = scanner.scan_stats_with_progress(path, Some(stats_callback))?;
+    let tree = scanner.scan_tree_with_progress(path, Some(tree_callback))?;
+    
+    progress_callback(0.66, "Phase 3/3: Counting file types...".to_string());
+    let file_type_counts = count_files_by_type(&tree);
+    
+    progress_callback(1.0, "Analysis completed".to_string());
     
     Ok(DirectoryAnalysis {
         stats,
