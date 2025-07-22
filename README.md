@@ -8,7 +8,7 @@
 
 ### A Directory Scanner and Printer
 
-### Splendir is WIP. There are no releases at this time. Approach with caution and assume features are missing or broken.
+### Splendir is WIP. Approach with caution and assume features are missing or broken.
 
 Creates tree views of files in a directory, annotated lists of files within a directory, and high-level reports of directory contents and file type distributions.
 
@@ -16,7 +16,7 @@ Splendir is built in Rust and implements a CLI tool, a GUI using Iced, and a reu
 
 ### Install
 
-This is a work in progress. Although releases and/or binaries may exist here, they are not guaranteed to work.
+This is a work in progress. Releases and/or binaries might be found in the Releases section, but they are not guaranteed to work.
 
 ### Build
 
