@@ -1,6 +1,9 @@
-![Logo](https://github.com/kamwoods/splendir/blob/main/assets/splendir-logo-150.png)
+![Logo](https://github.com/kamwoods/splendir/blob/main/assets/splendir-logo-64.png)
 
-## Splendir
+## Splendir 
+
+[![GitHub issues](https://img.shields.io/github/issues/kamwoods/splendir.svg)](https://github.com/kamwoods/splendir/issues)
+[![GitHub forks](https://img.shields.io/github/forks/kamwoods/splendir.svg)](https://github.com/kamwoods/splendir/network)
 
 ### A Directory Scanner and Printer
 
