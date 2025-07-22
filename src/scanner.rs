@@ -4,8 +4,12 @@ use std::io::{self, Read};
 use std::time::SystemTime;
 use sha2::{Sha256, Digest};
 use walkdir::WalkDir;
+use std::sync::Arc;
 
 use crate::{FileInfo, TreeNode, ScanError};
+
+/// Progress callback type for reporting scan progress
+pub type ProgressCallback = Arc<dyn Fn(f32, String) + Send + Sync>;
 
 /// Core directory scanner with configurable options
 #[derive(Debug, Clone)]
@@ -54,7 +58,23 @@ impl DirectoryScanner {
     
     /// Scan directory and return detailed file information
     pub fn scan_detailed(&self, path: &Path) -> Result<Vec<FileInfo>, ScanError> {
+        self.scan_detailed_with_progress(path, None)
+    }
+    
+    /// Scan directory with progress reporting
+    pub fn scan_detailed_with_progress(
+        &self, 
+        path: &Path, 
+        progress_callback: Option<ProgressCallback>
+    ) -> Result<Vec<FileInfo>, ScanError> {
         validate_path(path)?;
+        
+        // First, count total files for progress calculation
+        let total_files = if progress_callback.is_some() {
+            self.count_files(path)?
+        } else {
+            0
+        };
         
         let mut walker = WalkDir::new(path).follow_links(self.follow_symlinks);
         
@@ -81,25 +101,84 @@ impl DirectoryScanner {
         });
         
         let mut file_infos = Vec::new();
+        let mut processed = 0;
         
         for entry in files {
+            if let Some(ref callback) = progress_callback {
+                processed += 1;
+                let progress = processed as f32 / total_files as f32;
+                let status = format!("Processing: {}", entry.path().display());
+                callback(progress, status);
+            }
+            
             match self.process_file_with_options(entry.path()) {
                 Ok(file_info) => file_infos.push(file_info),
                 Err(e) => eprintln!("Error processing file '{}': {}", entry.path().display(), e),
             }
         }
         
+        if let Some(ref callback) = progress_callback {
+            callback(1.0, "Scan completed".to_string());
+        }
+        
         Ok(file_infos)
+    }
+    
+    /// Count total files for progress reporting
+    fn count_files(&self, path: &Path) -> Result<usize, ScanError> {
+        let mut walker = WalkDir::new(path).follow_links(self.follow_symlinks);
+        
+        if let Some(depth) = self.max_depth {
+            walker = walker.max_depth(depth);
+        }
+        
+        let count = walker
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| self.should_include_entry(e.path()))
+            .count();
+        
+        Ok(count)
     }
     
     /// Scan directory and return tree structure
     pub fn scan_tree(&self, path: &Path) -> Result<TreeNode, ScanError> {
+        self.scan_tree_with_progress(path, None)
+    }
+    
+    /// Scan directory tree with progress reporting
+    pub fn scan_tree_with_progress(
+        &self, 
+        path: &Path,
+        progress_callback: Option<ProgressCallback>
+    ) -> Result<TreeNode, ScanError> {
         validate_path(path)?;
-        self.build_tree_node(path, 0)
+        
+        if let Some(ref callback) = progress_callback {
+            callback(0.0, format!("Scanning: {}", path.display()));
+        }
+        
+        let result = self.build_tree_node(path, 0, &progress_callback);
+        
+        if let Some(ref callback) = progress_callback {
+            callback(1.0, "Tree scan completed".to_string());
+        }
+        
+        result
     }
     
     /// Get directory statistics without building full structures
     pub fn scan_stats(&self, path: &Path) -> Result<DirectoryStats, ScanError> {
+        self.scan_stats_with_progress(path, None)
+    }
+    
+    /// Get directory statistics with progress reporting
+    pub fn scan_stats_with_progress(
+        &self, 
+        path: &Path,
+        progress_callback: Option<ProgressCallback>
+    ) -> Result<DirectoryStats, ScanError> {
         validate_path(path)?;
         
         let mut stats = DirectoryStats::default();
@@ -109,7 +188,15 @@ impl DirectoryScanner {
             walker = walker.max_depth(depth);
         }
         
-        for entry in walker.into_iter().filter_map(|e| e.ok()) {
+        let entries: Vec<_> = walker.into_iter().filter_map(|e| e.ok()).collect();
+        let total = entries.len();
+        
+        for (i, entry) in entries.iter().enumerate() {
+            if let Some(ref callback) = progress_callback {
+                let progress = (i + 1) as f32 / total as f32;
+                callback(progress, format!("Analyzing: {}", entry.path().display()));
+            }
+            
             if !self.should_include_entry(entry.path()) {
                 continue;
             }
@@ -122,6 +209,10 @@ impl DirectoryScanner {
                     stats.total_size += metadata.len();
                 }
             }
+        }
+        
+        if let Some(ref callback) = progress_callback {
+            callback(1.0, "Analysis completed".to_string());
         }
         
         Ok(stats)
@@ -149,11 +240,20 @@ impl DirectoryScanner {
     }
     
     /// Recursively build tree structure
-    fn build_tree_node(&self, path: &Path, current_depth: usize) -> Result<TreeNode, ScanError> {
+    fn build_tree_node(
+        &self, 
+        path: &Path, 
+        current_depth: usize,
+        progress_callback: &Option<ProgressCallback>
+    ) -> Result<TreeNode, ScanError> {
         let name = path.file_name()
             .unwrap_or(path.as_os_str())
             .to_string_lossy()
             .to_string();
+        
+        if let Some(ref callback) = progress_callback {
+            callback(0.0, format!("Processing: {}", path.display()));
+        }
         
         let mut children = Vec::new();
         
@@ -178,7 +278,7 @@ impl DirectoryScanner {
             });
             
             for child_path in child_paths {
-                match self.build_tree_node(&child_path, current_depth + 1) {
+                match self.build_tree_node(&child_path, current_depth + 1, progress_callback) {
                     Ok(child_node) => children.push(child_node),
                     Err(e) => eprintln!("Error building tree for '{}': {}", child_path.display(), e),
                 }

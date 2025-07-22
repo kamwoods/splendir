@@ -1,19 +1,21 @@
 use iced::{
     widget::{button, checkbox, column, container, horizontal_space, pick_list, progress_bar, row, scrollable, text, text_input, Column},
-    Alignment, Element, Length, Theme, Task, Font,
+    Alignment, Element, Length, Theme, Task, Font, time,
 };
 use rfd::FileDialog;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Instant, Duration};
+use std::sync::{Arc, Mutex};
 
 use directory_scanner::{
-    analyze_directory, format_tree_output, scan_directory_tree,
-    DirectoryScanner, FileInfo,
+    analyze_directory_with_progress, format_tree_output, scan_directory_tree_with_progress,
+    DirectoryScanner, FileInfo, ProgressCallback,
 };
 
 pub fn run() -> iced::Result {
     iced::application("Splendir - Directory Scanner", update, view)
         .theme(|_| Theme::Dark)
+        .subscription(subscription)
         .run()
 }
 
@@ -66,6 +68,9 @@ impl std::fmt::Display for ScanPreset {
     }
 }
 
+// Shared progress state for communication between threads
+type ProgressState = Arc<Mutex<Option<(f32, String)>>>;
+
 #[derive(Default)]
 struct SplendirGui {
     // UI State
@@ -88,6 +93,9 @@ struct SplendirGui {
     
     // Error state
     error_message: Option<String>,
+    
+    // Progress tracking
+    progress_state: Option<ProgressState>,
 }
 
 impl Default for ScanMode {
@@ -126,6 +134,7 @@ enum Message {
     
     // Scan Events
     StartScan,
+    UpdateProgress,
     ScanComplete(ScanResults),
     ScanError(String),
 }
@@ -220,17 +229,31 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             state.scan_status = "Starting scan...".to_string();
             state.error_message = None;
             
+            // Create progress state for communication
+            let progress_state = Arc::new(Mutex::new(None));
+            state.progress_state = Some(progress_state.clone());
+            
             let scanner = create_scanner(state);
             let scan_mode = state.scan_mode.clone();
             let colorize = state.colorize_output;
             
             return Task::perform(
-                perform_scan(path, scanner, scan_mode, colorize),
+                perform_scan_with_progress(path, scanner, scan_mode, colorize, progress_state),
                 |result| match result {
                     Ok(results) => Message::ScanComplete(results),
                     Err(err) => Message::ScanError(err),
                 },
             );
+        }
+        Message::UpdateProgress => {
+            if let Some(ref progress_state) = state.progress_state {
+                if let Ok(guard) = progress_state.lock() {
+                    if let Some((progress, status)) = &*guard {
+                        state.scan_progress = *progress;
+                        state.scan_status = status.clone();
+                    }
+                }
+            }
         }
         Message::ScanComplete(results) => {
             state.is_scanning = false;
@@ -239,11 +262,13 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                 "Scan completed in {:.2}s",
                 state.scan_results.scan_time.unwrap_or(0.0)
             );
+            state.progress_state = None;
         }
         Message::ScanError(error) => {
             state.is_scanning = false;
             state.error_message = Some(error);
             state.scan_status = "Scan failed".to_string();
+            state.progress_state = None;
         }
     }
     
@@ -277,6 +302,15 @@ fn view(state: &SplendirGui) -> Element<Message> {
         .height(Length::Fill)
         .padding(20)
         .into()
+}
+
+fn subscription(state: &SplendirGui) -> iced::Subscription<Message> {
+    if state.is_scanning {
+        time::every(Duration::from_millis(100))
+            .map(|_| Message::UpdateProgress)
+    } else {
+        iced::Subscription::none()
+    }
 }
 
 fn create_scanner(state: &SplendirGui) -> DirectoryScanner {
@@ -481,26 +515,34 @@ fn view_analysis_results(state: &SplendirGui) -> Element<Message> {
     .into()
 }
 
-async fn perform_scan(
+async fn perform_scan_with_progress(
     path: PathBuf,
     scanner: DirectoryScanner,
     mode: ScanMode,
     colorize: bool,
+    progress_state: ProgressState,
 ) -> Result<ScanResults, String> {
     let start_time = Instant::now();
     
     let result = tokio::task::spawn_blocking(move || {
         let mut results = ScanResults::default();
         
+        // Create progress callback that updates the shared state
+        let progress_callback: ProgressCallback = Arc::new(move |progress, status| {
+            if let Ok(mut guard) = progress_state.lock() {
+                *guard = Some((progress, status));
+            }
+        });
+        
         match mode {
             ScanMode::Detailed => {
-                match scanner.scan_detailed(&path) {
+                match scanner.scan_detailed_with_progress(&path, Some(progress_callback)) {
                     Ok(files) => results.detailed_files = files,
                     Err(e) => return Err(format!("Scan failed: {}", e)),
                 }
             }
             ScanMode::Tree => {
-                match scan_directory_tree(&path) {
+                match scan_directory_tree_with_progress(&path, progress_callback) {
                     Ok(tree) => {
                         results.tree_output = format_tree_output(&tree, colorize);
                     }
@@ -508,7 +550,7 @@ async fn perform_scan(
                 }
             }
             ScanMode::Analysis => {
-                match analyze_directory(&path, scanner.include_hidden, scanner.max_depth) {
+                match analyze_directory_with_progress(&path, scanner.include_hidden, scanner.max_depth, progress_callback) {
                     Ok(analysis) => {
                         results.analysis_output = analysis.summary();
                     }
