@@ -26,17 +26,17 @@ The Splendir CLI and Splendir GUI are standalone executables. No installation is
 Linux executables: ```splendir-linux-x64.tar.gz```
 Windows executables: ```splendir-win-x64.tar.gz```
 
-Extract the files in a location of your choosing. In Linux, you can copy the ```splendir``` and ```splendir_gui``` files to ```/usr/local/bin``` to make them accessible. In Windows, youc an simple double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell for the command-line utility.
+Extract the files in a location of your choosing. In Linux, you can copy the ```splendir``` and ```splendir_gui``` files to ```/usr/local/bin``` to make them accessible. In Windows, you can simply double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell to use the command-line utility.
 
 ### Usage (GUI)
 
 The Splendir GUI is relatively simple. Click the **Browse...** button to select a local directory. Click the **Start Scan** button to begin a scan once you have selected a directory. The **Mode:** dropdown can be set to **Detailed File List** (a columnar list of files), **Tree View** (a graphical tree view similar to the command-line tool "tree"), or **Directory Analysis** (a high-level overview of the directory contents). When a scan is complete, an **Export** button will appear to allow export of the content.
 
-![Splendir Directory Listing View](assets/sds-view1.png)
+![Splendir Directory Listing View](assets/sds-dirview.png)
 
-Both the **Directory Listing** view and **Tree View** are implemented with the appropriate data structures and virtual scrolling features to allow viewing directories of arbitrary size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to arbitrary points in the output with effectively no lag.
+Both the **Directory Listing** view and **Tree View** are implemented with the appropriate data structures and virtual scrolling features to allow viewing directories of any size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to any point in the output to inspect and review before exporting.
 
-![Splendir Tree Listing View](assets/sds-view2.png)
+![Splendir Tree Listing View](assets/sds-treeview.png)
 
 Currently, the **Detailed File List** view can be exported as a comma-separated value file, and the **Tree View** can be exported as a simple text file. Additional export options are planned for upcoming releases.
 
