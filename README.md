@@ -20,15 +20,15 @@ The Splendir CLI and Splendir GUI are standalone executables. No installation is
 
 Linux executables:
 ```
-splendir-linux-x64.zip
+splendir-linux-x64.tar.gz
 ```
 
 Windows executables:
 ```
-splendir-win-x64.zip
+splendir-win-x64.tar.gz
 ```
 
-Unzip the file in a location of your choosing. In Linux, you can copy the ```splendir``` and ```splendir_gui``` files to ```/usr/local/bin``` to make them accessible. In Windows, youc an simple double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell for the command-line utility.
+Extract the files in a location of your choosing. In Linux, you can copy the ```splendir``` and ```splendir_gui``` files to ```/usr/local/bin``` to make them accessible. In Windows, youc an simple double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell for the command-line utility.
 
 ### Usage (GUI)
 
