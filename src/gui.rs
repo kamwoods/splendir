@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, checkbox, column, container, horizontal_space, pick_list, progress_bar, row, scrollable, text, text_input, Column},
+    widget::{button, checkbox, column, container, horizontal_space, pick_list, progress_bar, row, scrollable, text, text_input, Column, Space},
     Alignment, Element, Length, Theme, Task, Font, time,
 };
 use rfd::FileDialog;
@@ -79,7 +79,8 @@ struct SplendirGui {
     scan_preset: ScanPreset,
     include_hidden: bool,
     follow_symlinks: bool,
-    calculate_hashes: bool,
+    calculate_sha: bool,
+    calculate_md5: bool,
     colorize_output: bool,
     max_depth: String,
     
@@ -96,6 +97,11 @@ struct SplendirGui {
     
     // Progress tracking
     progress_state: Option<ProgressState>,
+    
+    // Virtual scrolling state
+    tree_scroll_offset: f32,
+    tree_flattened_cache: Vec<FlatTreeNode>,
+    detail_scroll_offset: f32,
 }
 
 impl Default for ScanMode {
@@ -130,6 +136,7 @@ enum Message {
     IncludeHiddenToggled(bool),
     FollowSymlinksToggled(bool),
     CalculateHashesToggled(bool),
+    CalculateMD5Toggled(bool),
     ColorizeOutputToggled(bool),
     MaxDepthChanged(String),
     
@@ -142,6 +149,10 @@ enum Message {
     // Export Events
     ExportResults,
     ExportComplete(Result<String, String>),
+    
+    // Scrolling Events
+    TreeScrolled(f32),
+    DetailScrolled(f32),
 }
 
 fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
@@ -174,26 +185,34 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             // Update options based on preset
             match preset {
                 ScanPreset::Fast => {
-                    state.calculate_hashes = false;
+                    state.calculate_sha = false;
+                    state.calculate_md5 = false;
                     state.max_depth = "3".to_string();
+                    state.colorize_output = false;
                 }
                 ScanPreset::Complete => {
                     state.include_hidden = true;
                     state.follow_symlinks = true;
-                    state.calculate_hashes = true;
+                    state.calculate_sha = true;
+                    state.calculate_md5 = true;
                     state.max_depth = String::new();
+                    state.colorize_output = false;
                 }
                 ScanPreset::Security => {
                     state.include_hidden = true;
                     state.follow_symlinks = false;
-                    state.calculate_hashes = true;
+                    state.calculate_sha = true;
+                    state.calculate_md5 = true;
                     state.max_depth = String::new();
+                    state.colorize_output = false;
                 }
                 ScanPreset::Default => {
                     state.include_hidden = false;
                     state.follow_symlinks = false;
-                    state.calculate_hashes = true;
+                    state.calculate_sha = false;
+                    state.calculate_md5 = false;
                     state.max_depth = String::new();
+                    state.colorize_output = false;
                 }
             }
         }
@@ -204,7 +223,10 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             state.follow_symlinks = value;
         }
         Message::CalculateHashesToggled(value) => {
-            state.calculate_hashes = value;
+            state.calculate_sha = value;
+        }
+        Message::CalculateMD5Toggled(value) => {
+            state.calculate_md5 = value;
         }
         Message::ColorizeOutputToggled(value) => {
             state.colorize_output = value;
@@ -233,6 +255,11 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             state.scan_progress = 0.0;
             state.scan_status = "Starting scan...".to_string();
             state.error_message = None;
+            
+            // Reset scroll positions
+            state.tree_scroll_offset = 0.0;
+            state.detail_scroll_offset = 0.0;
+            state.tree_flattened_cache.clear();
             
             // Create progress state for communication
             let progress_state = Arc::new(Mutex::new(None));
@@ -268,6 +295,13 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                 state.scan_results.scan_time.unwrap_or(0.0)
             );
             state.progress_state = None;
+            
+            // Update tree cache if in tree mode
+            if state.scan_mode == ScanMode::Tree {
+                if let Some(ref tree_node) = state.scan_results.tree_node {
+                    state.tree_flattened_cache = flatten_tree(tree_node, 0);
+                }
+            }
         }
         Message::ScanError(error) => {
             state.is_scanning = false;
@@ -312,6 +346,12 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.error_message = Some(format!("Export failed: {}", error));
                 }
             }
+        }
+        Message::TreeScrolled(offset) => {
+            state.tree_scroll_offset = offset;
+        }
+        Message::DetailScrolled(offset) => {
+            state.detail_scroll_offset = offset;
         }
     }
     
@@ -360,7 +400,8 @@ fn create_scanner(state: &SplendirGui) -> DirectoryScanner {
     let mut scanner = DirectoryScanner::new()
         .include_hidden(state.include_hidden)
         .follow_symlinks(state.follow_symlinks)
-        .calculate_hashes(state.calculate_hashes);
+        .calculate_sha(state.calculate_sha)
+        .calculate_md5(state.calculate_md5);
     
     if let Ok(depth) = state.max_depth.parse::<usize>() {
         scanner = scanner.max_depth(depth);
@@ -439,9 +480,11 @@ fn view_options(state: &SplendirGui) -> Element<Message> {
         horizontal_space().width(20),
         checkbox("Follow symlinks", state.follow_symlinks).on_toggle(Message::FollowSymlinksToggled),
         horizontal_space().width(20),
-        checkbox("Calculate SHA256", state.calculate_hashes).on_toggle(Message::CalculateHashesToggled),
+        checkbox("Calculate SHA256", state.calculate_sha).on_toggle(Message::CalculateHashesToggled),
         horizontal_space().width(20),
-        checkbox("Colorize output", state.colorize_output).on_toggle(Message::ColorizeOutputToggled),
+        checkbox("Calculate MD5", state.calculate_md5).on_toggle(Message::CalculateMD5Toggled),
+        horizontal_space().width(20),
+        checkbox("Colorize output", state.colorize_output),
     ]
     .spacing(5)
     .align_y(Alignment::Center);
@@ -462,7 +505,7 @@ fn view_progress(state: &SplendirGui) -> Element<Message> {
 
 fn view_results(state: &SplendirGui) -> Element<Message> {
     if state.scan_results.detailed_files.is_empty() 
-        && state.scan_results.tree_output.is_empty() 
+        && state.scan_results.tree_node.is_none()
         && state.scan_results.analysis_output.is_empty() {
         return container(
             text("No scan results yet. Select a directory and click 'Start Scan'.")
@@ -482,8 +525,8 @@ fn view_results(state: &SplendirGui) -> Element<Message> {
     .align_y(Alignment::Center);
     
     let results_content = match state.scan_mode {
-        ScanMode::Detailed => view_detailed_results(state),
-        ScanMode::Tree => view_tree_results(state),
+        ScanMode::Detailed => view_detailed_results_virtual(state),
+        ScanMode::Tree => view_tree_results_virtual(state),
         ScanMode::Analysis => view_analysis_results(state),
     };
     
@@ -497,105 +540,181 @@ fn view_results(state: &SplendirGui) -> Element<Message> {
     .into()
 }
 
-fn view_detailed_results(state: &SplendirGui) -> Element<Message> {
+// Virtual scrolling for detailed results
+fn view_detailed_results_virtual(state: &SplendirGui) -> Element<Message> {
     if state.scan_results.detailed_files.is_empty() {
         return text("No files found").into();
     }
     
+    const ROW_HEIGHT: f32 = 25.0;
+    const VIEWPORT_HEIGHT: f32 = 600.0;
+    const VISIBLE_ROWS: usize = (VIEWPORT_HEIGHT / ROW_HEIGHT) as usize + 2;
+    
     let total_files = state.scan_results.detailed_files.len();
+    let total_height = total_files as f32 * ROW_HEIGHT;
+    
     let file_count_text = text(format!("Total files: {}", total_files)).size(14);
     
     let header = row![
-        text("Name").width(Length::FillPortion(3)),
+        text("File").width(Length::FillPortion(2)),
+        text("Path").width(Length::FillPortion(3)),
         text("Size").width(Length::FillPortion(1)),
         text("Modified").width(Length::FillPortion(2)),
-        text("SHA256").width(Length::FillPortion(3)),
+        text("MD5").width(Length::FillPortion(2)),
+        text("SHA256").width(Length::FillPortion(2)),
     ]
     .spacing(10)
     .padding([10, 0]);
     
-    // Limit displayed files to improve performance
-    const MAX_DISPLAYED_FILES: usize = 1000;
-    let displayed_files = if state.scan_results.detailed_files.len() > MAX_DISPLAYED_FILES {
-        &state.scan_results.detailed_files[..MAX_DISPLAYED_FILES]
-    } else {
-        &state.scan_results.detailed_files
-    };
+    // Calculate visible range
+    let scroll_offset = state.detail_scroll_offset.max(0.0).min((total_height - VIEWPORT_HEIGHT).max(0.0));
+    let start_index = (scroll_offset / ROW_HEIGHT) as usize;
+    let end_index = (start_index + VISIBLE_ROWS).min(total_files);
     
-    let mut file_rows = Column::new().spacing(2);
+    // Create virtual viewport
+    let mut viewport = Column::new().spacing(0);
     
-    for file in displayed_files {
-        let row = row![
-            text(&file.name).width(Length::FillPortion(3)).size(14),
-            text(format_size(file.size)).width(Length::FillPortion(1)).size(14),
-            text(&file.last_modified).width(Length::FillPortion(2)).size(14),
-            text(if file.sha256.len() > 20 { 
-                format!("{}...", &file.sha256[..20]) 
-            } else { 
-                file.sha256.clone() 
-            }).width(Length::FillPortion(3)).size(14),
-        ]
-        .spacing(10)
-        .padding([2, 0]);
-        
-        file_rows = file_rows.push(row);
+    // Add spacer for items above viewport
+    if start_index > 0 {
+        viewport = viewport.push(Space::new(Length::Fill, start_index as f32 * ROW_HEIGHT));
     }
     
-    let warning = if state.scan_results.detailed_files.len() > MAX_DISPLAYED_FILES {
-        Some(text(format!(
-            "Showing first {} of {} files. Export to file for complete list.", 
-            MAX_DISPLAYED_FILES, 
-            total_files
-        ))
-        .size(14)
-        .color(iced::Color::from_rgb(0.8, 0.6, 0.2)))
-    } else {
-        None
-    };
-    
-    let mut content = vec![
-        file_count_text.into(),
-        header.into(),
-        scrollable(file_rows).height(Length::Fill).into(),
-    ];
-    
-    if let Some(warning_text) = warning {
-        content.push(warning_text.into());
+    // Add visible rows
+    for i in start_index..end_index {
+        if let Some(file) = state.scan_results.detailed_files.get(i) {
+            let row = row![
+                text(&file.name).width(Length::FillPortion(2)).size(14),
+                text(&file.directory_path).width(Length::FillPortion(3)).size(14),
+                text(format_size(file.size)).width(Length::FillPortion(1)).size(14),
+                text(&file.last_modified).width(Length::FillPortion(2)).size(14),
+                text(if file.md5.len() > 12 { 
+                    format!("{}...", &file.md5[..12]) 
+                } else { 
+                    file.md5.clone() 
+                }).width(Length::FillPortion(2)).size(14),
+                text(if file.sha256.len() > 12 { 
+                    format!("{}...", &file.sha256[..12]) 
+                } else { 
+                    file.sha256.clone() 
+                }).width(Length::FillPortion(2)).size(14),
+            ]
+            .spacing(10)
+            .height(ROW_HEIGHT)
+            .align_y(Alignment::Center);
+            
+            viewport = viewport.push(row);
+        }
     }
     
-    Column::with_children(content)
-        .spacing(10)
-        .into()
+    // Add spacer for items below viewport
+    let remaining_items = total_files.saturating_sub(end_index);
+    if remaining_items > 0 {
+        viewport = viewport.push(Space::new(Length::Fill, remaining_items as f32 * ROW_HEIGHT));
+    }
+    
+    column![
+        file_count_text,
+        header,
+        container(
+            scrollable(viewport)
+                .height(VIEWPORT_HEIGHT)
+                .on_scroll(|viewport| {
+                    Message::DetailScrolled(viewport.absolute_offset().y)
+                })
+        )
+        .height(VIEWPORT_HEIGHT)
+    ]
+    .spacing(10)
+    .into()
 }
 
-fn view_tree_results(state: &SplendirGui) -> Element<Message> {
-    if let Some(ref tree_node) = state.scan_results.tree_node {
-        // Flatten tree to calculate visible nodes
-        let flattened = flatten_tree(tree_node, 0);
-        let total_nodes = flattened.len();
-        
-        column![
-            text(format!("Tree view ({} nodes)", total_nodes)).size(14),
-            view_tree_efficient(flattened, state.colorize_output)
-        ]
-        .spacing(10)
-        .into()
-    } else if !state.scan_results.tree_output.is_empty() {
-        // Fallback to text output if tree node is not available
-        column![
-            text("Tree view (text mode)").size(14),
-            scrollable(
-                text(&state.scan_results.tree_output)
-                    .size(14)
-                    .font(Font::MONOSPACE)
-            )
-            .height(Length::Fill)
-        ]
-        .spacing(10)
-        .into()
-    } else {
-        text("No tree data available").into()
+// Virtual scrolling for tree view
+fn view_tree_results_virtual(state: &SplendirGui) -> Element<Message> {
+    if state.tree_flattened_cache.is_empty() {
+        if state.scan_results.tree_node.is_none() {
+            return text("No tree data available").into();
+        }
+        // Should have been populated during scan complete, but just in case
+        return text("Processing tree data...").into();
     }
+    
+    const ROW_HEIGHT: f32 = 20.0;
+    const VIEWPORT_HEIGHT: f32 = 600.0;
+    const VISIBLE_ROWS: usize = (VIEWPORT_HEIGHT / ROW_HEIGHT) as usize + 2;
+    
+    let total_nodes = state.tree_flattened_cache.len();
+    let total_height = total_nodes as f32 * ROW_HEIGHT;
+    
+    // Calculate visible range
+    let scroll_offset = state.tree_scroll_offset.max(0.0).min((total_height - VIEWPORT_HEIGHT).max(0.0));
+    let start_index = (scroll_offset / ROW_HEIGHT) as usize;
+    let end_index = (start_index + VISIBLE_ROWS).min(total_nodes);
+    
+    // Create virtual viewport
+    let mut viewport = Column::new().spacing(0);
+    
+    // Add spacer for items above viewport
+    if start_index > 0 {
+        viewport = viewport.push(Space::new(Length::Fill, start_index as f32 * ROW_HEIGHT));
+    }
+    
+    // Add visible nodes
+    for i in start_index..end_index {
+        if let Some(node) = state.tree_flattened_cache.get(i) {
+            let indent = "  ".repeat(node.depth);
+            let prefix = if node.is_last { "└─ " } else { "├─ " };
+            
+            let node_text = if state.colorize_output && node.is_directory {
+                format!("{}{}📁 {}", indent, prefix, node.name)
+            } else if state.colorize_output {
+                format!("{}{}📄 {}", indent, prefix, node.name)
+            } else {
+                format!("{}{}{}", indent, prefix, node.name)
+            };
+            
+            viewport = viewport.push(
+                container(
+                    text(node_text)
+                        .size(14)
+                        .font(Font::MONOSPACE)
+                )
+                .height(ROW_HEIGHT)
+            );
+        }
+    }
+    
+    // Add spacer for items below viewport
+    let remaining_items = total_nodes.saturating_sub(end_index);
+    if remaining_items > 0 {
+        viewport = viewport.push(Space::new(Length::Fill, remaining_items as f32 * ROW_HEIGHT));
+    }
+    
+    column![
+        text(format!("Tree view ({} nodes)", total_nodes)).size(14),
+        container(
+            scrollable(viewport)
+                .height(VIEWPORT_HEIGHT)
+                .on_scroll(|viewport| {
+                    Message::TreeScrolled(viewport.absolute_offset().y)
+                })
+        )
+        .height(VIEWPORT_HEIGHT)
+    ]
+    .spacing(10)
+    .into()
+}
+
+fn view_analysis_results(state: &SplendirGui) -> Element<Message> {
+    if state.scan_results.analysis_output.is_empty() {
+        return text("No analysis data available").into();
+    }
+    
+    scrollable(
+        text(&state.scan_results.analysis_output)
+            .size(16)
+    )
+    .height(Length::Fill)
+    .into()
 }
 
 // Flatten tree structure for efficient rendering
@@ -647,70 +766,6 @@ fn flatten_tree_recursive(node: &TreeNode, depth: usize, is_last: bool) -> Vec<F
     }
     
     result
-}
-
-fn view_tree_efficient(flattened: Vec<FlatTreeNode>, colorize: bool) -> Element<'static, Message> {
-    const MAX_VISIBLE_NODES: usize = 1000;
-    
-    let total_nodes = flattened.len();
-    
-    // Only render a subset of nodes for performance
-    let visible_nodes: Vec<_> = flattened.into_iter()
-        .take(MAX_VISIBLE_NODES)
-        .collect();
-    
-    let mut tree_column = Column::new().spacing(0);
-    
-    for node in visible_nodes {
-        let indent = "  ".repeat(node.depth);
-        let prefix = if node.is_last { "└─ " } else { "├─ " };
-        
-        let node_text = if colorize && node.is_directory {
-            format!("{}{}📁 {}", indent, prefix, node.name)
-        } else if colorize {
-            format!("{}{}📄 {}", indent, prefix, node.name)
-        } else {
-            format!("{}{}{}", indent, prefix, node.name)
-        };
-        
-        tree_column = tree_column.push(
-            text(node_text)
-                .size(14)
-                .font(Font::MONOSPACE)
-        );
-    }
-    
-    let content = scrollable(tree_column).height(Length::Fill);
-    
-    if total_nodes > MAX_VISIBLE_NODES {
-        column![
-            content,
-            text(format!(
-                "Showing first {} of {} nodes. Export for complete tree.",
-                MAX_VISIBLE_NODES,
-                total_nodes
-            ))
-            .size(14)
-            .color(iced::Color::from_rgb(0.8, 0.6, 0.2))
-        ]
-        .spacing(10)
-        .into()
-    } else {
-        content.into()
-    }
-}
-
-fn view_analysis_results(state: &SplendirGui) -> Element<Message> {
-    if state.scan_results.analysis_output.is_empty() {
-        return text("No analysis data available").into();
-    }
-    
-    scrollable(
-        text(&state.scan_results.analysis_output)
-            .size(16)
-    )
-    .height(Length::Fill)
-    .into()
 }
 
 async fn perform_scan_with_progress(
@@ -802,17 +857,19 @@ async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode) -> 
         match mode {
             ScanMode::Detailed => {
                 // Export as CSV for detailed mode
-                writeln!(file, "Name,Full Path,Size (bytes),Last Modified,SHA256")
+                writeln!(file, "Name,Path,Full Path,Size (bytes),Last Modified,MD5,SHA256")
                     .map_err(|e| format!("Failed to write header: {}", e))?;
                 
                 for file_info in &results.detailed_files {
                     writeln!(
                         file,
-                        "\"{}\",\"{}\",{},\"{}\",\"{}\"",
+                        "\"{}\",\"{}\",\"{}\",{},\"{}\",\"{}\",\"{}\"",
                         file_info.name.replace("\"", "\"\""),
+                        file_info.directory_path.replace("\"", "\"\""),
                         file_info.full_path.replace("\"", "\"\""),
                         file_info.size,
                         file_info.last_modified,
+                        file_info.md5,
                         file_info.sha256
                     )
                     .map_err(|e| format!("Failed to write data: {}", e))?;
