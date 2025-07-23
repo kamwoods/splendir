@@ -16,18 +16,37 @@ Splendir is built in Rust and implements a CLI tool, a GUI using Iced, and a reu
 
 ### Install
 
-This is a work in progress. Releases and/or binaries might be found in the Releases section, but they are not guaranteed to work.
+The Splendir CLI and Splendir GUI are standalone executables. No installation is required. These tools are early WIP, but if a release is available you can download one of the following files:
+
+Linux executables:
+```
+splendir-linux-x64.zip
+```
+
+Windows executables:
+```
+splendir-win-x64.zip
+```
+
+Unzip the file in a location of your choosing. In Linux, you can copy the ```splendir``` and ```splendir_gui``` files to ```/usr/local/bin``` to make them accessible. In Windows, youc an simple double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell for the command-line utility.
 
 ### Usage (GUI)
 
+The Splendir GUI is relatively simple. Click the **Browse...** button to select a local directory. Click the **Start Scan** button to begin a scan once you have selected a directory. The **Mode:** dropdown can be set to **Detailed File List** (a columnar list of files), **Tree View** (a graphical tree view similar to the command-line tool "tree"), or **Directory Analysis** (a high-level overview of the directory contents). When a scan is complete, an **Export** button will appear to allow export of the content.
+
 ![Splendir Directory Listing View](assets/sds-view1.png)
+
+Both the **Directory Listing** view and **Tree View** are implemented with the appropriate data structures and virtual scrolling features to allow viewing directories of arbitrary size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to arbitrary points in the output with effectively no lag.
+
 ![Splendir Tree Listing View](assets/sds-view2.png)
+
+Currently, the **Detailed File List** view can be exported as a comma-separated value file, and the **Tree View** can be exported as a simple text file. Additional export options are planned for upcoming releases.
 
 ### Usage (CLI)
 
 TBD
 
-### Build
+### Build (Developers and Contributors)
 
 To build, ensure you are using Rust 1.88.0 or newer. Build the CLI and GUI binaries with:
 
