@@ -39,7 +39,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: splendir-${{ matrix.os }}
-        path: target/release/splendir${{ runner.os == 'windows-latest' && '.exe' || '' }}
+        path: target/release/splendir${{ matrix.os == 'windows-latest' && '.exe' || '' }}
 
     - name: Upload GUI build artifact
       uses: actions/upload-artifact@v4
