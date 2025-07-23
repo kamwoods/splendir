@@ -44,15 +44,37 @@ Currently, the **Detailed File List** view can be exported as a comma-separated 
 
 ### Usage (CLI)
 
-TBD
+The CLI is currently limited but functional. To generate a directory listing with file name, path, size, last modified date, and SHA256, invoke it as follows:
+
+```./splendir /path/to/dir```
+
+To generate a tree view, invoke it as follows:
+
+```./splendir /path/to/dir --tree```
+
+To generate a tree view with basic colorization, invoke it as follows:
+
+```./splendir /path/to/dir -C --tree```
+
+Additional features are in progress.
 
 ### Build (Developers and Contributors)
 
-To build, ensure you are using Rust 1.88.0 or newer. Build the CLI and GUI binaries with:
+To build, ensure you are using Rust 1.88.0 or newer. To install Rust, follow the instructions at https://www.rust-lang.org/tools/install.
+
+Clone this repo with the command:
+
+```git clone https://github.com/kamwoods/splendir```
+
+Navigate to the root of your cloned directory, and build the CLI and GUI binaries with:
 
 ```shell
 cargo build --release
 ```
+
+### Contributing
+
+Open an issue in this repo or send a PR. Additional info TBD.
 
 ### License
 
