@@ -1,5 +1,3 @@
-![Logo](https://github.com/kamwoods/splendir/blob/main/assets/splendir-logo-64.png)
-
 ## Splendir 
 
 [![GitHub issues](https://img.shields.io/github/issues/kamwoods/splendir.svg)](https://github.com/kamwoods/splendir/issues)
@@ -10,23 +8,23 @@
 
 ### Splendir is an early WIP. Some features will be missing or broken and both the interface and functionality are subject to change.
 
-Creates tree views of files in a directory, annotated lists of files within a directory, and high-level reports of directory contents and file type distributions.
+Splendir is a powerful directory scanner with CLI and GUI interfaces. It can create tree views of files in a directory, annotated lists of files within a directory, and high-level reports of directory contents and file type distributions.
 
-Splendir is built in Rust and implements a CLI tool, a GUI using Iced, and a reusable library.
+Some notable features:
+- Live, scrollable views of the entire directory list or tree, regardless of size.
+- Calculates SHA256 and MD5 hashes on request
+- Shows hidden files and follows symlinks on request
+- Exports tree structures as ASCII text files
+- Exports directory listings as CSV files
+
+Splendir is built in Rust and implements the GUI using Iced.
 
 ### Install
 
-The Splendir CLI and Splendir GUI are standalone executables. No installation is required. These tools are early WIP, but if a release is available you can download one of the following files:
+The Splendir CLI and Splendir GUI are standalone executables. No installation is required. These tools are early WIP, but if a release is available (check the Releases section in the main GitHub repo) you can download one of the following files:
 
-Linux executables:
-```
-splendir-linux-x64.tar.gz
-```
-
-Windows executables:
-```
-splendir-win-x64.tar.gz
-```
+Linux executables: ```splendir-linux-x64.tar.gz```
+Windows executables: ```splendir-win-x64.tar.gz```
 
 Extract the files in a location of your choosing. In Linux, you can copy the ```splendir``` and ```splendir_gui``` files to ```/usr/local/bin``` to make them accessible. In Windows, youc an simple double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell for the command-line utility.
 
