@@ -20,15 +20,17 @@ fn main() {
         process::exit(1);
     }
     
-    let path = &args[1];
+    // Parse arguments - options first, then directory path
     let mut tree_mode = false;
     let mut colorize = false;
     let mut fast_mode = false;
     let mut analysis_mode = false;
+    let mut directory_path: Option<String> = None;
     
-    // Parse flags
-    for arg in &args[2..] {
-        match arg.as_str() {
+    // Skip program name (args[0]) and parse remaining arguments
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
             "--tree" => tree_mode = true,
             "-C" => colorize = true,
             "--fast" => fast_mode = true,
@@ -37,25 +39,50 @@ fn main() {
                 print_help(&args[0]);
                 process::exit(0);
             }
-            _ => {
-                eprintln!("Unknown flag: {}", arg);
-                print_usage(&args[0]);
-                process::exit(1);
+            arg => {
+                // If it starts with '-', it's an unknown flag
+                if arg.starts_with('-') {
+                    eprintln!("Unknown flag: {}", arg);
+                    print_usage(&args[0]);
+                    process::exit(1);
+                } else {
+                    // This should be the directory path
+                    if directory_path.is_some() {
+                        eprintln!("Error: Multiple directory paths specified. Only one directory can be scanned at a time.");
+                        print_usage(&args[0]);
+                        process::exit(1);
+                    }
+                    directory_path = Some(arg.to_string());
+                }
             }
         }
+        i += 1;
     }
     
-    let path_obj = Path::new(path);
+    // Ensure we have a directory path
+    let path_str = match directory_path {
+        Some(path) => path,
+        None => {
+            eprintln!("Error: No directory path specified.");
+            print_usage(&args[0]);
+            process::exit(1);
+        }
+    };
+    
+    let path_obj = Path::new(&path_str);
+    
+    // Validate conflicting options
+    if tree_mode && analysis_mode {
+        eprintln!("Error: Cannot use --tree and --analyze together");
+        process::exit(1);
+    }
     
     // Execute based on mode
     match (tree_mode, analysis_mode) {
         (true, false) => print_tree_mode(path_obj, colorize, fast_mode),
         (false, true) => print_analysis_mode(path_obj),
         (false, false) => print_detailed_mode(path_obj, fast_mode),
-        (true, true) => {
-            eprintln!("Error: Cannot use --tree and --analyze together");
-            process::exit(1);
-        }
+        (true, true) => unreachable!(), // Already handled above
     }
 }
 
@@ -175,7 +202,7 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 }
 
 fn print_usage(program_name: &str) {
-    eprintln!("Usage: {} <directory_path> [OPTIONS]", program_name);
+    eprintln!("Usage: {} [OPTIONS] <directory_path>", program_name);
     eprintln!("Try '{} --help' for more information.", program_name);
 }
 
@@ -183,7 +210,7 @@ fn print_help(program_name: &str) {
     println!("Splendir - Recursively scan directories and display file information");
     println!();
     println!("USAGE:");
-    println!("    {} <directory_path> [OPTIONS]", program_name);
+    println!("    {} [OPTIONS] <directory_path>", program_name);
     println!();
     println!("ARGUMENTS:");
     println!("    <directory_path>    Path to the directory to scan");
@@ -197,10 +224,11 @@ fn print_help(program_name: &str) {
     println!();
     println!("EXAMPLES:");
     println!("    {} /home/user                    # Detailed file listing", program_name);
-    println!("    {} /home/user --tree             # Tree view", program_name);
-    println!("    {} /home/user --tree -C          # Colorized tree view", program_name);
-    println!("    {} /home/user --fast             # Fast scan without SHA256", program_name);
-    println!("    {} /home/user --analyze          # Comprehensive analysis", program_name);
+    println!("    {} --tree /home/user             # Tree view", program_name);
+    println!("    {} --tree -C /home/user          # Colorized tree view", program_name);
+    println!("    {} --fast /home/user             # Fast scan without SHA256", program_name);
+    println!("    {} --analyze /home/user          # Comprehensive analysis", program_name);
+    println!("    {} --help                        # Show this help message", program_name);
     println!();
     println!("MODES:");
     println!("    Default    : Shows detailed file information including SHA256 hashes");
