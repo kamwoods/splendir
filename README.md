@@ -6,7 +6,7 @@
 
 ### A Directory Scanner and Printer
 
-### Splendir is an early WIP. Some features will be missing or broken and both the interface and functionality are subject to change.
+### Splendir is an early WIP. The GUI and CLI interfaces and functionality are subject to change, and some features may be missing.
 
 Splendir is a powerful directory scanner with CLI and GUI interfaces. It can create tree views of files in a directory, annotated lists of files within a directory, and high-level reports of directory contents and file type distributions.
 
@@ -42,17 +42,52 @@ Currently, the **Detailed File List** view can be exported as a comma-separated 
 
 ### Usage (CLI)
 
-The CLI is currently limited but functional. To generate a directory listing with file name, path, size, last modified date, and SHA256, invoke it as follows:
+To generate a directory listing with file name, path, size, last modified date, and SHA256, invoke the CLI tool as follows:
 
 ```./splendir /path/to/dir```
 
 To generate a tree view, invoke it as follows:
 
-```./splendir /path/to/dir --tree```
+```./splendir --tree /path/to/dir``
 
 To generate a tree view with basic colorization, invoke it as follows:
 
-```./splendir /path/to/dir -C --tree```
+```./splendir -C --tree /path/to/dir```
+
+Full features (subject to change in this early WIP) can be viewed with:
+
+```./splendir --help```
+
+```shell
+Splendir - Recursively scan directories and display file information
+
+USAGE:
+    ./splendir [OPTIONS] <directory_path>
+
+ARGUMENTS:
+    <directory_path>    Path to the directory to scan
+
+OPTIONS:
+    --tree              Display results as a tree structure
+    -C                  Colorize the tree output (only works with --tree)
+    --fast              Fast mode - skip SHA256 calculation and limit depth
+    --analyze           Comprehensive directory analysis with statistics
+    -h, --help          Print this help information
+
+EXAMPLES:
+    ./splendir /home/user                    # Detailed file listing
+    ./splendir --tree /home/user             # Tree view
+    ./splendir --tree -C /home/user          # Colorized tree view
+    ./splendir --fast /home/user             # Fast scan without SHA256
+    ./splendir --analyze /home/user          # Comprehensive analysis
+    ./splendir --help                        # Show this help message
+
+MODES:
+    Default    : Shows detailed file information including SHA256 hashes
+    Tree       : Shows directory structure as a visual tree
+    Fast       : Quick scan without SHA256 calculation (faster for large dirs)
+    Analysis   : Comprehensive statistics and file type breakdown
+```
 
 Additional features are in progress.
 
