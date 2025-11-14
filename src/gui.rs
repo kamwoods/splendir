@@ -79,7 +79,7 @@ struct SplendirGui {
     scan_preset: ScanPreset,
     include_hidden: bool,
     follow_symlinks: bool,
-    calculate_sha: bool,
+    calculate_hashes: bool,
     calculate_md5: bool,
     colorize_output: bool,
     max_depth: String,
@@ -179,13 +179,20 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::ScanModeSelected(mode) => {
             state.scan_mode = mode;
+            
+            // Update tree cache when switching to tree mode (if we have tree data)
+            if mode == ScanMode::Tree && state.tree_flattened_cache.is_empty() {
+                if let Some(ref tree_node) = state.scan_results.tree_node {
+                    state.tree_flattened_cache = flatten_tree(tree_node, 0);
+                }
+            }
         }
         Message::PresetSelected(preset) => {
             state.scan_preset = preset.clone();
             // Update options based on preset
             match preset {
                 ScanPreset::Fast => {
-                    state.calculate_sha = false;
+                    state.calculate_hashes = false;
                     state.calculate_md5 = false;
                     state.max_depth = "3".to_string();
                     state.colorize_output = false;
@@ -193,7 +200,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                 ScanPreset::Complete => {
                     state.include_hidden = true;
                     state.follow_symlinks = true;
-                    state.calculate_sha = true;
+                    state.calculate_hashes = true;
                     state.calculate_md5 = true;
                     state.max_depth = String::new();
                     state.colorize_output = false;
@@ -201,7 +208,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                 ScanPreset::Security => {
                     state.include_hidden = true;
                     state.follow_symlinks = false;
-                    state.calculate_sha = true;
+                    state.calculate_hashes = true;
                     state.calculate_md5 = true;
                     state.max_depth = String::new();
                     state.colorize_output = false;
@@ -209,7 +216,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                 ScanPreset::Default => {
                     state.include_hidden = false;
                     state.follow_symlinks = false;
-                    state.calculate_sha = false;
+                    state.calculate_hashes = true;
                     state.calculate_md5 = false;
                     state.max_depth = String::new();
                     state.colorize_output = false;
@@ -223,7 +230,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             state.follow_symlinks = value;
         }
         Message::CalculateHashesToggled(value) => {
-            state.calculate_sha = value;
+            state.calculate_hashes = value;
         }
         Message::CalculateMD5Toggled(value) => {
             state.calculate_md5 = value;
@@ -266,11 +273,11 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             state.progress_state = Some(progress_state.clone());
             
             let scanner = create_scanner(state);
-            let scan_mode = state.scan_mode.clone();
             let colorize = state.colorize_output;
             
+            // Note: we no longer pass scan_mode since we scan all modes
             return Task::perform(
-                perform_scan_with_progress(path, scanner, scan_mode, colorize, progress_state),
+                perform_scan_with_progress(path, scanner, ScanMode::Detailed, colorize, progress_state),
                 |result| match result {
                     Ok(results) => Message::ScanComplete(results),
                     Err(err) => Message::ScanError(err),
@@ -289,19 +296,18 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::ScanComplete(results) => {
             state.is_scanning = false;
+            
+            // Update tree cache regardless of current mode (since we now have tree data)
+            if let Some(ref tree_node) = results.tree_node {
+                state.tree_flattened_cache = flatten_tree(tree_node, 0);
+            }
+            
             state.scan_results = results;
             state.scan_status = format!(
-                "Scan completed in {:.2}s",
+                "All scans completed in {:.2}s",
                 state.scan_results.scan_time.unwrap_or(0.0)
             );
             state.progress_state = None;
-            
-            // Update tree cache if in tree mode
-            if state.scan_mode == ScanMode::Tree {
-                if let Some(ref tree_node) = state.scan_results.tree_node {
-                    state.tree_flattened_cache = flatten_tree(tree_node, 0);
-                }
-            }
         }
         Message::ScanError(error) => {
             state.is_scanning = false;
@@ -400,7 +406,7 @@ fn create_scanner(state: &SplendirGui) -> DirectoryScanner {
     let mut scanner = DirectoryScanner::new()
         .include_hidden(state.include_hidden)
         .follow_symlinks(state.follow_symlinks)
-        .calculate_sha(state.calculate_sha)
+        .calculate_sha(state.calculate_hashes)
         .calculate_md5(state.calculate_md5);
     
     if let Ok(depth) = state.max_depth.parse::<usize>() {
@@ -411,10 +417,6 @@ fn create_scanner(state: &SplendirGui) -> DirectoryScanner {
 }
 
 fn view_header(state: &SplendirGui) -> Element<Message> {
-    let title = text("Splendir Directory Scanner")
-        .size(28)
-        .color(iced::Color::from_rgb(0.2, 0.6, 0.8));
-    
     let path_input = text_input("Select a directory to scan...", &state.selected_path)
         .on_input(Message::PathChanged)
         .padding(10)
@@ -428,17 +430,13 @@ fn view_header(state: &SplendirGui) -> Element<Message> {
         .on_press_maybe(if !state.is_scanning { Some(Message::StartScan) } else { None })
         .padding([10, 20]);
     
-    column![
-        container(title).width(Length::Fill).center_x(Length::Fill),
-        row![
-            path_input,
-            browse_button,
-            scan_button,
-        ]
-        .spacing(10)
-        .align_y(Alignment::Center),
+    row![
+        path_input,
+        browse_button,
+        scan_button,
     ]
-    .spacing(20)
+    .spacing(10)
+    .align_y(Alignment::Center)
     .into()
 }
 
@@ -480,7 +478,7 @@ fn view_options(state: &SplendirGui) -> Element<Message> {
         horizontal_space().width(20),
         checkbox("Follow symlinks", state.follow_symlinks).on_toggle(Message::FollowSymlinksToggled),
         horizontal_space().width(20),
-        checkbox("Calculate SHA256", state.calculate_sha).on_toggle(Message::CalculateHashesToggled),
+        checkbox("Calculate SHA256", state.calculate_hashes).on_toggle(Message::CalculateHashesToggled),
         horizontal_space().width(20),
         checkbox("Calculate MD5", state.calculate_md5).on_toggle(Message::CalculateMD5Toggled),
         horizontal_space().width(20),
@@ -771,7 +769,7 @@ fn flatten_tree_recursive(node: &TreeNode, depth: usize, is_last: bool) -> Vec<F
 async fn perform_scan_with_progress(
     path: PathBuf,
     scanner: DirectoryScanner,
-    mode: ScanMode,
+    _mode: ScanMode,  // No longer needed - we scan all modes
     colorize: bool,
     progress_state: ProgressState,
 ) -> Result<ScanResults, String> {
@@ -780,37 +778,60 @@ async fn perform_scan_with_progress(
     let result = tokio::task::spawn_blocking(move || {
         let mut results = ScanResults::default();
         
-        // Create progress callback that updates the shared state
-        let progress_callback: ProgressCallback = Arc::new(move |progress, status| {
-            if let Ok(mut guard) = progress_state.lock() {
-                *guard = Some((progress, status));
+        // Phase 1: Detailed file scan (slowest, with hashes)
+        // This is the most comprehensive scan and will populate the OS file cache
+        {
+            let progress_state_clone = progress_state.clone();
+            let progress_callback: ProgressCallback = Arc::new(move |progress, status| {
+                if let Ok(mut guard) = progress_state_clone.lock() {
+                    *guard = Some((progress * 0.4, format!("Phase 1/3: {}", status)));
+                }
+            });
+            
+            match scanner.scan_detailed_with_progress(&path, Some(progress_callback)) {
+                Ok(files) => results.detailed_files = files,
+                Err(e) => return Err(format!("Detailed scan failed: {}", e)),
             }
-        });
+        }
         
-        match mode {
-            ScanMode::Detailed => {
-                match scanner.scan_detailed_with_progress(&path, Some(progress_callback)) {
-                    Ok(files) => results.detailed_files = files,
-                    Err(e) => return Err(format!("Scan failed: {}", e)),
+        // Phase 2: Tree structure scan (fast, uses cached file system data)
+        {
+            let progress_state_clone = progress_state.clone();
+            let progress_callback: ProgressCallback = Arc::new(move |progress, status| {
+                if let Ok(mut guard) = progress_state_clone.lock() {
+                    *guard = Some((0.4 + progress * 0.3, format!("Phase 2/3: {}", status)));
                 }
-            }
-            ScanMode::Tree => {
-                match scan_directory_tree_with_progress(&path, progress_callback) {
-                    Ok(tree) => {
-                        results.tree_output = format_tree_output(&tree, colorize);
-                        results.tree_node = Some(tree);
-                    }
-                    Err(e) => return Err(format!("Tree scan failed: {}", e)),
+            });
+            
+            match scan_directory_tree_with_progress(&path, progress_callback) {
+                Ok(tree) => {
+                    results.tree_output = format_tree_output(&tree, colorize);
+                    results.tree_node = Some(tree);
                 }
+                Err(e) => return Err(format!("Tree scan failed: {}", e)),
             }
-            ScanMode::Analysis => {
-                match analyze_directory_with_progress(&path, scanner.include_hidden, scanner.max_depth, progress_callback) {
-                    Ok(analysis) => {
-                        results.analysis_output = analysis.summary();
-                    }
-                    Err(e) => return Err(format!("Analysis failed: {}", e)),
+        }
+        
+        // Phase 3: Directory analysis (fast, uses cached data)
+        {
+            let progress_state_clone = progress_state.clone();
+            let progress_callback: ProgressCallback = Arc::new(move |progress, status| {
+                if let Ok(mut guard) = progress_state_clone.lock() {
+                    *guard = Some((0.7 + progress * 0.3, format!("Phase 3/3: {}", status)));
                 }
+            });
+            
+            match analyze_directory_with_progress(&path, scanner.include_hidden, scanner.max_depth, progress_callback) {
+                Ok(analysis) => {
+                    results.analysis_output = analysis.summary();
+                }
+                Err(e) => return Err(format!("Analysis failed: {}", e)),
             }
+        }
+        
+        // Final progress update
+        if let Ok(mut guard) = progress_state.lock() {
+            *guard = Some((1.0, "All scans completed".to_string()));
         }
         
         Ok(results)

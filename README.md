@@ -4,11 +4,9 @@
 [![Build](https://github.com/kamwoods/splendir/actions/workflows/rust.yml/badge.svg)](https://github.com/kamwoods/splendir/actions/workflows/rust.yml)
 [![GitHub forks](https://img.shields.io/github/forks/kamwoods/splendir.svg)](https://github.com/kamwoods/splendir/network)
 
-### A Directory Scanner and Printer
+### A High Performance Directory Scanner and Printer
 
-### Splendir is an early WIP. The GUI and CLI interfaces and functionality are subject to change, and some features may be missing.
-
-Splendir is a powerful directory scanner with CLI and GUI interfaces. It can create tree views of files in a directory, annotated lists of files within a directory, and high-level reports of directory contents and file type distributions.
+Splendir is a powerful directory scanner with GUI and CLI interfaces. It can create tree views of files in a directory, annotated lists of files within a directory, and high-level reports of directory contents and file type distributions.
 
 Some notable features:
 - Live, scrollable views of the entire directory list or tree, regardless of size.
@@ -17,11 +15,11 @@ Some notable features:
 - Exports tree structures as ASCII text files
 - Exports directory listings as CSV files
 
-Splendir is built in Rust and implements the GUI using Iced.
+Splendir is built in Rust and implements the GUI using Iced. It is WIP, and some features may be subject to change.
 
 ### Install
 
-The Splendir CLI and Splendir GUI are standalone executables. No installation is required. These tools are early WIP, but if a release is available (check the Releases section in the main GitHub repo) you can download one of the following files:
+The Splendir CLI and Splendir GUI are standalone executables. No installation is required. From the Releases section in the main GitHub repo) you can download one of the following files:
 
 Linux executables: ```splendir-linux-x64.tar.gz```
 Windows executables: ```splendir-win-x64.tar.gz```
@@ -30,7 +28,7 @@ Extract the files in a location of your choosing. In Linux, you can copy the ```
 
 ### Usage (GUI)
 
-The Splendir GUI is relatively simple. Click the **Browse...** button to select a local directory. Click the **Start Scan** button to begin a scan once you have selected a directory. The **Mode:** dropdown can be set to **Detailed File List** (a columnar list of files), **Tree View** (a graphical tree view similar to the command-line tool "tree"), or **Directory Analysis** (a high-level overview of the directory contents). When a scan is complete, an **Export** button will appear to allow export of the content.
+The Splendir GUI is relatively simple. Click the **Browse...** button to select a local directory. Click the **Start Scan** button to begin a scan once you have selected a directory. The **Mode:** dropdown can be set to **Detailed File List** (a columnar list of files), **Tree View** (a graphical tree view similar to the command-line tool "tree"), or **Directory Analysis** (a high-level overview of the directory contents). All three views are generated when you click **Start Scan**. When a scan is complete, an **Export** button will appear to allow export of the content.
 
 ![Splendir Directory Listing View](assets/sds-dirview.png)
 
@@ -38,7 +36,9 @@ Both the **Directory Listing** view and **Tree View** are implemented with the a
 
 ![Splendir Tree Listing View](assets/sds-treeview.png)
 
-Currently, the **Detailed File List** view can be exported as a comma-separated value file, and the **Tree View** can be exported as a simple text file. Additional export options are planned for upcoming releases.
+Currently, the **Detailed File List** view is exported as a comma-separated value file, and the **Tree View** is exported as a simple text file. Additional export options are planned for upcoming releases.
+
+![Splendir Directory Analysis View](assets/sds-analysis.png)
 
 ### Usage (CLI)
 
