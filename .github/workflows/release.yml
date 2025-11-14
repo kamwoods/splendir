@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  package-and-upload:
+    name: Package release binaries
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare directories
+        run: |
+          mkdir -p packages/linux
+          mkdir -p packages/macos
+          mkdir -p packages/windows
+          mkdir -p debbuild/DEBIAN
+          mkdir -p debbuild/usr/bin
+          mkdir checksums
+
+      # -------------------------------------------------------
+      # Linux Packaging (x64)
+      # -------------------------------------------------------
+      - name: Package Linux binaries (x64)
+        run: |
+          cp artifacts/splendir-ubuntu-latest/splendir packages/linux/
+          cp artifacts/splendir_gui-ubuntu-latest/splendir_gui packages/linux/
+          chmod +x packages/linux/splendir packages/linux/splendir_gui
+
+          tar -czvf packages/splendir-linux-x64.tar.gz -C packages/linux .
+          zip -j packages/splendir-linux-x64.zip packages/linux/*
+
+      # -------------------------------------------------------
+      # Create .deb package
+      # -------------------------------------------------------
+      - name: Create .deb package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          INSTALL_DIR="debbuild/usr/bin"
+
+          # Copy binaries into the package filesystem
+          cp packages/linux/splendir "$INSTALL_DIR/splendir"
+          cp packages/linux/splendir_gui "$INSTALL_DIR/splendir_gui"
+
+          chmod 755 "$INSTALL_DIR/splendir" "$INSTALL_DIR/splendir_gui"
+
+          # Create control file
+          cat > debbuild/DEBIAN/control <<EOF
+          Package: splendir
+          Version: $VERSION
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Depends: libc6 (>= 2.17)
+          Maintainer: Kam Woods
+          Description: A directory scanner with GUI and CLI interfaces
+           Includes both splendir (CLI) and splendir_gui (GUI).
+          EOF
+
+          # Build the .deb
+          dpkg-deb --build debbuild packages/splendir-x64.deb
+
+      # -------------------------------------------------------
+      # macOS Packaging
+      # -------------------------------------------------------
+      - name: Package macOS binaries
+        run: |
+          cp artifacts/splendir-macos-latest/splendir packages/macos/
+          cp artifacts/splendir_gui-macos-latest/splendir_gui packages/macos/
+          chmod +x packages/macos/splendir packages/macos/splendir_gui
+
+          tar -czvf packages/splendir-macos.tar.gz -C packages/macos .
+          zip -j packages/splendir-macos.zip packages/macos/*
+
+      # -------------------------------------------------------
+      # Windows Packaging (x64)
+      # -------------------------------------------------------
+      - name: Package Windows binaries (x64)
+        run: |
+          cp artifacts/splendir-windows-latest/splendir.exe packages/windows/
+          cp artifacts/splendir_gui-windows-latest/splendir_gui.exe packages/windows/
+
+          tar -czvf packages/splendir-windows-x64.tar.gz -C packages/windows .
+          zip -j packages/splendir-windows-x64.zip packages/windows/*
+
+      # -------------------------------------------------------
+      # SHA256 Checksums
+      # -------------------------------------------------------
+      - name: Generate SHA256 checksums
+        run: |
+          cd packages
+          for file in *.tar.gz *.zip *.deb; do
+            sha256sum "$file" > "../checksums/$file.sha256"
+          done
+
+      # -------------------------------------------------------
+      # Upload release assets
+      # -------------------------------------------------------
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            packages/splendir-linux-x64.tar.gz
+            packages/splendir-linux-x64.zip
+            packages/splendir-macos.tar.gz
+            packages/splendir-macos.zip
+            packages/splendir-windows-x64.tar.gz
+            packages/splendir-windows-x64.zip
+            packages/splendir-x64.deb
+            checksums/*.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

@@ -1,9 +1,9 @@
 [package]
 name = "splendir"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 edition = "2021"
 authors = ["Kam Woods"]
-description = "A powerful directory scanner with CLI and GUI interfaces"
+description = "A directory scanner with GUI and CLI interfaces"
 license = "MIT"
 repository = "https://github.com/kamwoods/splendir"
 readme = "README.md"
