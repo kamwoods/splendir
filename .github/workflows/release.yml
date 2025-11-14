@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  package-and-upload:
+    name: Package release binaries
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare directories
+        run: |
+          mkdir -p packages/linux
+          mkdir -p packages/macos
+          mkdir -p packages/windows
+          mkdir checksums
+
+      # -------------------------------------------------------
+      # Linux Packaging
+      # -------------------------------------------------------
+      - name: Package Linux binaries
+        run: |
+          cp artifacts/splendir-ubuntu-latest/splendir packages/linux/
+          cp artifacts/splendir_gui-ubuntu-latest/splendir_gui packages/linux/
+          chmod +x packages/linux/splendir packages/linux/splendir_gui
+
+          tar -czvf packages/splendir-linux.tar.gz -C packages/linux .
+          zip -j packages/splendir-linux.zip packages/linux/*
+
+      # -------------------------------------------------------
+      # macOS Packaging
+      # -------------------------------------------------------
+      - name: Package macOS binaries
+        run: |
+          cp artifacts/splendir-macos-latest/splendir packages/macos/
+          cp artifacts/splendir_gui-macos-latest/splendir_gui packages/macos/
+          chmod +x packages/macos/splendir packages/macos/splendir_gui
+
+          tar -czvf packages/splendir-macos.tar.gz -C packages/macos .
+          zip -j packages/splendir-macos.zip packages/macos/*
+
+      # -------------------------------------------------------
+      # Windows Packaging
+      # -------------------------------------------------------
+      - name: Package Windows binaries
+        run: |
+          cp artifacts/splendir-windows-latest/splendir.exe packages/windows/
+          cp artifacts/splendir_gui-windows-latest/splendir_gui.exe packages/windows/
+
+          tar -czvf packages/splendir-windows.tar.gz -C packages/windows .
+          zip -j packages/splendir-windows.zip packages/windows/*
+
+      # -------------------------------------------------------
+      # Generate SHA256 checksums
+      # -------------------------------------------------------
+      - name: Generate SHA256 checksums
+        run: |
+          cd packages
+          for file in *.tar.gz *.zip; do
+            sha256sum "$file" > "../checksums/$file.sha256"
+          done
+
+      # -------------------------------------------------------
+      # Upload assets to GitHub Release
+      # -------------------------------------------------------
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            packages/splendir-linux.tar.gz
+            packages/splendir-linux.zip
+            packages/splendir-macos.tar.gz
+            packages/splendir-macos.zip
+            packages/splendir-windows.tar.gz
+            packages/splendir-windows.zip
+            checksums/*.sha256
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
