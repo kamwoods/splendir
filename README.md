@@ -21,10 +21,11 @@ Splendir is built in Rust and implements the GUI using Iced. It is WIP, and some
 
 The Splendir CLI and Splendir GUI are standalone executables. No installation is required. From the Releases section in the main GitHub repo) you can download one of the following files:
 
-Linux executables: ```splendir-linux-x64.tar.gz```
-Windows executables: ```splendir-win-x64.tar.gz```
+Linux executables: ```splendir-linux-x64.tar.gz``` or ```splendir-linux-x64.zip```
+Windows executables: ```splendir-windows-x64.tar.gz``` or ```splendir-windows-x64.zip```
+Mac executables: ```splendir-macos.tar.gz``` or ```splendir-macos.zip```
 
-Extract the files in a location of your choosing. In Linux, you can copy the ```splendir``` and ```splendir_gui``` files to ```/usr/local/bin``` to make them accessible. In Windows, you can simply double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell to use the command-line utility.
+Extract the files in a location of your choosing. In Linux, you can copy the ```splendir``` and ```splendir_gui``` files to ```/usr/local/bin``` to make them accessible. In Windows, you can simply double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell to use the command-line utility. Windows and macOS may generate warnings about an unknown or untrusted developer. Windows should include an option within the prompt to ```Run Anyway```. In macOS, you can click ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
 
 ### Usage (GUI)
 
