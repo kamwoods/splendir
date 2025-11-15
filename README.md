@@ -50,7 +50,7 @@ To generate a directory listing with file name, path, size, last modified date, 
 
 To generate a tree view, invoke it as follows:
 
-```./splendir --tree /path/to/dir``
+```./splendir --tree /path/to/dir```
 
 To generate a tree view with basic colorization, invoke it as follows:
 
