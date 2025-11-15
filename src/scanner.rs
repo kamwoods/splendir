@@ -5,6 +5,8 @@ use std::time::SystemTime;
 use sha2::{Sha256, Digest};
 use walkdir::WalkDir;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use rayon::prelude::*;
 
 use crate::{FileInfo, TreeNode, ScanError};
 
@@ -76,77 +78,86 @@ impl DirectoryScanner {
     ) -> Result<Vec<FileInfo>, ScanError> {
         validate_path(path)?;
         
-        // First, count total files for progress calculation
-        let total_files = if progress_callback.is_some() {
-            self.count_files(path)?
-        } else {
-            0
-        };
-        
         let mut walker = WalkDir::new(path).follow_links(self.follow_symlinks);
         
         if let Some(depth) = self.max_depth {
             walker = walker.max_depth(depth);
         }
         
-        let mut files: Vec<_> = walker
+        // Collect all file paths first (sequential traversal)
+        let files: Vec<_> = walker
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
             .filter(|e| self.should_include_entry(e.path()))
             .collect();
         
+        let total_files = files.len();
+        
+        if total_files == 0 {
+            if let Some(ref callback) = progress_callback {
+                callback(1.0, "No files found".to_string());
+            }
+            return Ok(Vec::new());
+        }
+        
         // Sort files by depth (directory level) first, then by path
-        files.sort_by(|a, b| {
-            let depth_a = a.path().components().count();
-            let depth_b = b.path().components().count();
+        // This helps with disk locality
+        let mut file_paths: Vec<_> = files.iter()
+            .map(|e| e.path().to_path_buf())
+            .collect();
+        
+        file_paths.sort_by(|a, b| {
+            let depth_a = a.components().count();
+            let depth_b = b.components().count();
             
             match depth_a.cmp(&depth_b) {
-                std::cmp::Ordering::Equal => a.path().cmp(b.path()),
+                std::cmp::Ordering::Equal => a.cmp(b),
                 other => other
             }
         });
         
-        let mut file_infos = Vec::new();
-        let mut processed = 0;
+        // Atomic counter for progress tracking
+        let processed = Arc::new(AtomicUsize::new(0));
+        let processed_clone = processed.clone();
         
-        for entry in files {
-            if let Some(ref callback) = progress_callback {
-                processed += 1;
-                let progress = processed as f32 / total_files as f32;
-                let status = format!("Processing: {}", entry.path().display());
-                callback(progress, status);
-            }
-            
-            match self.process_file_with_options(entry.path()) {
-                Ok(file_info) => file_infos.push(file_info),
-                Err(e) => eprintln!("Error processing file '{}': {}", entry.path().display(), e),
-            }
-        }
+        // Process files in parallel
+        let calculate_sha = self.calculate_sha;
+        let calculate_md5 = self.calculate_md5;
+        
+        let file_infos: Vec<FileInfo> = file_paths
+            .par_iter()
+            .filter_map(|path| {
+                // Process the file
+                let result = process_file_with_hash_options(path, calculate_sha, calculate_md5);
+                
+                // Update progress (with throttling to avoid callback spam)
+                if let Some(ref callback) = progress_callback {
+                    let current = processed_clone.fetch_add(1, Ordering::Relaxed) + 1;
+                    
+                    // Only update progress every 10 files or on last file to reduce overhead
+                    if current % 10 == 0 || current == total_files {
+                        let progress = current as f32 / total_files as f32;
+                        let status = format!("Processing: {} of {} files", current, total_files);
+                        callback(progress, status);
+                    }
+                }
+                
+                match result {
+                    Ok(info) => Some(info),
+                    Err(e) => {
+                        eprintln!("Error processing file '{}': {}", path.display(), e);
+                        None
+                    }
+                }
+            })
+            .collect();
         
         if let Some(ref callback) = progress_callback {
-            callback(1.0, "Scan completed".to_string());
+            callback(1.0, format!("Scan completed: {} files processed", total_files));
         }
         
         Ok(file_infos)
-    }
-    
-    /// Count total files for progress reporting
-    fn count_files(&self, path: &Path) -> Result<usize, ScanError> {
-        let mut walker = WalkDir::new(path).follow_links(self.follow_symlinks);
-        
-        if let Some(depth) = self.max_depth {
-            walker = walker.max_depth(depth);
-        }
-        
-        let count = walker
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_type().is_file())
-            .filter(|e| self.should_include_entry(e.path()))
-            .count();
-        
-        Ok(count)
     }
     
     /// Scan directory and return tree structure

@@ -1,6 +1,6 @@
 [package]
 name = "splendir"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 edition = "2021"
 authors = ["Kam Woods"]
 description = "A directory scanner with GUI and CLI interfaces"
@@ -16,6 +16,10 @@ walkdir = "2.5"
 sha2 = "0.10"
 md5 = "0.7"
 chrono = { version = "0.4", features = ["serde"] }
+
+# Parallel processing
+rayon = "1.8"
+num_cpus = "1.16"
 
 # GUI dependencies (optional)
 iced = { version = "0.13", features = ["tokio"], optional = true }
