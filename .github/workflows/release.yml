@@ -8,7 +8,9 @@ jobs:
   package-and-upload:
     name: Package release binaries
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
+    
     steps:
       - name: Download all build artifacts
         uses: dawidd6/action-download-artifact@v3
