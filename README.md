@@ -9,14 +9,14 @@
 Splendir is a powerful directory scanner with GUI and CLI interfaces. Splendir tools generate tree views of files in a directory, annotated lists of files within a directory, and high-level reports of directory contents and file type distributions.
 
 Features:
-- Dynamically loaded scrollable views entire directory, regardless of size.
+- Dynamically loaded live scrollable views of directories
 - Multithreaded processing
 - Calculates SHA256 and MD5 hashes on request
-- Shows hidden files and follows symlinks on request
+- Hidden file and symlink handling on request
 - Exports tree structures as ASCII text files
 - Exports directory listings as CSV files
 
-Splendir is built in Rust and implements the GUI using Iced. It is WIP, and some features may be subject to change.
+Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). It is WIP, and some features may be subject to change.
 
 ### Install
 
