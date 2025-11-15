@@ -1,15 +1,21 @@
 use std::env;
 use std::path::Path;
 use std::process;
+use std::io::{self, Write};
+use std::sync::Arc;
 
 // Import from our library - now much simpler!
 use directory_scanner::{
     scan_directory_detailed, 
-    scan_directory_tree, 
+    scan_directory_detailed_with_progress,
+    scan_directory_tree,
+    scan_directory_tree_with_progress, 
     format_tree_output,
     analyze_directory,
+    analyze_directory_with_progress,
     ScannerPresets,
-    scan_with_options
+    scan_with_options,
+    scan_with_options_and_progress,
 };
 
 fn main() {
@@ -88,13 +94,14 @@ fn main() {
 
 fn print_tree_mode(path: &Path, colorize: bool, fast_mode: bool) {
     println!("Directory tree for: {}", path.display());
-    println!();
+    
+    let progress_callback = create_progress_callback();
     
     let tree_result = if fast_mode {
         let scanner = ScannerPresets::fast();
-        scanner.scan_tree(path)
+        scanner.scan_tree_with_progress(path, Some(progress_callback))
     } else {
-        scan_directory_tree(path)
+        scan_directory_tree_with_progress(path, progress_callback)
     };
     
     match tree_result {
@@ -122,11 +129,13 @@ fn print_detailed_mode(path: &Path, fast_mode: bool) {
     }
     println!("{:-<100}", "");
     
+    let progress_callback = create_progress_callback();
+    
     let files_result = if fast_mode {
         let scanner = ScannerPresets::fast();
-        scan_with_options(path, scanner)
+        scan_with_options_and_progress(path, scanner, progress_callback)
     } else {
-        scan_directory_detailed(path)
+        scan_directory_detailed_with_progress(path, progress_callback)
     };
     
     match files_result {
@@ -164,10 +173,10 @@ fn print_detailed_mode(path: &Path, fast_mode: bool) {
 
 fn print_analysis_mode(path: &Path) {
     println!("Analyzing directory: {}", path.display());
-    println!("Please wait...");
-    println!();
     
-    match analyze_directory(path, false, Some(20)) {
+    let progress_callback = create_progress_callback();
+    
+    match analyze_directory_with_progress(path, false, Some(20), progress_callback) {
         Ok(analysis) => {
             println!("{}", analysis.summary());
             
@@ -191,6 +200,31 @@ fn print_analysis_mode(path: &Path) {
             process::exit(1);
         }
     }
+}
+
+/// Create a CLI progress callback that shows a progress bar
+fn create_progress_callback() -> Arc<dyn Fn(f32, String) + Send + Sync> {
+    Arc::new(|progress: f32, status: String| {
+        // Clear the line
+        print!("\r");
+        
+        // Create progress bar
+        let width = 40;
+        let filled = (width as f32 * progress) as usize;
+        let empty = width - filled;
+        let bar = "█".repeat(filled) + &"░".repeat(empty);
+        
+        // Print progress
+        print!("[{}] {:>3.0}% {}", bar, progress * 100.0, status);
+        
+        // Flush to ensure immediate display
+        io::stdout().flush().unwrap();
+        
+        // If complete, print newline
+        if progress >= 1.0 {
+            println!();
+        }
+    })
 }
 
 fn truncate_string(s: &str, max_len: usize) -> String {

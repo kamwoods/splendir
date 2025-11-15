@@ -6,10 +6,11 @@
 
 ### A High Performance Directory Scanner and Printer
 
-Splendir is a powerful directory scanner with GUI and CLI interfaces. It can create tree views of files in a directory, annotated lists of files within a directory, and high-level reports of directory contents and file type distributions.
+Splendir is a powerful directory scanner with GUI and CLI interfaces. Splendir tools generate tree views of files in a directory, annotated lists of files within a directory, and high-level reports of directory contents and file type distributions.
 
-Some notable features:
-- Live, scrollable views of the entire directory list or tree, regardless of size.
+Features:
+- Dynamically loaded scrollable views entire directory, regardless of size.
+- Multithreaded processing
 - Calculates SHA256 and MD5 hashes on request
 - Shows hidden files and follows symlinks on request
 - Exports tree structures as ASCII text files

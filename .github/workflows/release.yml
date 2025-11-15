@@ -11,8 +11,10 @@ jobs:
 
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v3
         with:
+          workflow: rust.yml
+          workflow_conclusion: success
           path: artifacts/
 
       - name: Prepare directories
@@ -117,4 +119,3 @@ jobs:
             checksums/*.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
