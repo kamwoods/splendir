@@ -2,6 +2,7 @@ use iced::{
     widget::{button, checkbox, column, container, horizontal_space, pick_list, progress_bar, row, scrollable, text, text_input, Column, Space},
     Alignment, Element, Length, Theme, Task, Font, time,
 };
+use iced::window;
 use rfd::FileDialog;
 use std::path::PathBuf;
 use std::time::{Instant, Duration};
@@ -12,8 +13,19 @@ use directory_scanner::{
     DirectoryScanner, FileInfo, ProgressCallback, TreeNode,
 };
 
+/// Version string read from Cargo.toml at compile time
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Generate an appropriate application title
+const APP_TITLE: &str = concat!("Splendir v", env!("CARGO_PKG_VERSION"));
+
 pub fn run() -> iced::Result {
-    iced::application("Splendir - Directory Scanner", update, view)
+    iced::application(APP_TITLE, update, view)
+        .window(window::Settings {
+            // floats required in Iced 0.13
+            min_size: Some(iced::Size::new(1024.0, 768.0)),
+            ..Default::default()
+        })
         .theme(|_| Theme::Dark)
         .subscription(subscription)
         .run()
