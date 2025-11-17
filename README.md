@@ -10,13 +10,15 @@ Splendir is a powerful directory scanner with GUI and CLI interfaces. Splendir t
 
 Features:
 - Dynamically loaded live scrollable views of directories
-- Multithreaded processing
-- Calculates SHA256 and MD5 hashes on request
-- Hidden file and symlink handling on request
-- Exports tree structures as ASCII text files
-- Exports directory listings as CSV files
+- Multi-threaded processing
+- SHA256 and MD5 hash calculations on request
+- Hidden file and symlink traversal on request
+- Export of tree structures as ASCII text files
+- Export of directory listings as CSV files
 
-Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). It is WIP, and some features may be subject to change.
+Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). Multi-threading for hash calculations is handled by [rayon](https://github.com/rayon-rs/rayon).
+
+Splendir releases should be "feature complete" for the publicly described features, even in the current alpha releases. Splendir is a WIP, and the main branch of this repo may include untested development code that is subject to change.
 
 ### Install
 
@@ -80,7 +82,7 @@ EXAMPLES:
     ./splendir /home/user                    # Detailed file listing
     ./splendir --tree /home/user             # Tree view
     ./splendir --tree -C /home/user          # Colorized tree view
-    ./splendir --fast /home/user             # Fast scan without SHA256
+    ./splendir --fast /home/user             # Fast scan without hashes
     ./splendir --analyze /home/user          # Comprehensive analysis
     ./splendir --help                        # Show this help message
 
