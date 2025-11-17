@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, checkbox, column, container, horizontal_space, pick_list, progress_bar, row, scrollable, text, text_input, Column, Space},
+    widget::{button, checkbox, column, container, horizontal_space, pick_list, progress_bar, row, scrollable, stack, text, text_input, Column, Space},
     Alignment, Element, Length, Theme, Task, Font, time,
 };
 use iced::window;
@@ -95,6 +95,7 @@ struct ColumnVisibility {
     show_created: bool,
     show_modified: bool,
     show_accessed: bool,
+    show_format: bool,
     calculate_md5: bool,
     calculate_sha256: bool,
 }
@@ -119,6 +120,8 @@ struct SplendirGui {
     show_created: bool,
     show_modified: bool,
     show_accessed: bool,
+    show_format: bool,
+    calculate_format: bool,
     
     // Scan State
     is_scanning: bool,
@@ -141,6 +144,9 @@ struct SplendirGui {
     tree_scroll_offset: f32,
     tree_flattened_cache: Vec<FlatTreeNode>,
     detail_scroll_offset: f32,
+    
+    // Dialog state
+    show_about: bool,
 }
 
 impl Default for ScanMode {
@@ -176,6 +182,8 @@ impl Default for SplendirGui {
             show_created: false,
             show_modified: true,
             show_accessed: false,
+            show_format: false,
+            calculate_format: false,
             
             is_scanning: false,
             scan_progress: 0.0,
@@ -187,6 +195,7 @@ impl Default for SplendirGui {
             tree_scroll_offset: 0.0,
             tree_flattened_cache: Vec::new(),
             detail_scroll_offset: 0.0,
+            show_about: false,
         }
     }
 }
@@ -223,6 +232,7 @@ enum Message {
     ShowCreatedToggled(bool),
     ShowModifiedToggled(bool),
     ShowAccessedToggled(bool),
+    ShowFormatToggled(bool),
     
     // Scan Events
     StartScan,
@@ -237,6 +247,11 @@ enum Message {
     // Scrolling Events
     TreeScrolled(f32),
     DetailScrolled(f32),
+    
+    // Application Events
+    ShowAbout,
+    CloseAbout,
+    Exit,
 }
 
 fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
@@ -289,6 +304,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.show_created = false;
                     state.show_modified = false;
                     state.show_accessed = false;
+                    state.show_format = false;
                 }
                 ScanPreset::Complete => {
                     state.include_hidden = true;
@@ -305,6 +321,8 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.show_created = true;
                     state.show_modified = true;
                     state.show_accessed = true;
+                    state.show_format = true;
+                    state.calculate_format = true;
                 }
                 ScanPreset::Default => {
                     state.include_hidden = false;
@@ -321,6 +339,8 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.show_created = false;
                     state.show_modified = true;
                     state.show_accessed = false;
+                    state.show_format = false;
+                    state.calculate_format = false;
                 }
                 ScanPreset::DefaultMD5 => {
                     state.include_hidden = false;
@@ -337,6 +357,8 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.show_created = false;
                     state.show_modified = true;
                     state.show_accessed = false;
+                    state.show_format = false;
+                    state.calculate_format = false;
                 }
                 ScanPreset::DefaultSHA256 => {
                     state.include_hidden = false;
@@ -353,6 +375,8 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.show_created = false;
                     state.show_modified = true;
                     state.show_accessed = false;
+                    state.show_format = false;
+                    state.calculate_format = false;
                 }
             }
         }
@@ -394,6 +418,10 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::ShowAccessedToggled(value) => {
             state.show_accessed = value;
+        }
+        Message::ShowFormatToggled(value) => {
+            state.show_format = value;
+            state.calculate_format = value;
         }
         Message::StartScan => {
             if state.selected_path.is_empty() {
@@ -487,6 +515,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                 show_created: state.show_created,
                 show_modified: state.show_modified,
                 show_accessed: state.show_accessed,
+                show_format: state.show_format,
                 calculate_md5: state.calculate_md5,
                 calculate_sha256: state.calculate_sha256,
             };
@@ -526,6 +555,15 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::DetailScrolled(offset) => {
             state.detail_scroll_offset = offset;
+        }
+        Message::ShowAbout => {
+            state.show_about = true;
+        }
+        Message::CloseAbout => {
+            state.show_about = false;
+        }
+        Message::Exit => {
+            return window::get_latest().and_then(window::close);
         }
     }
     
@@ -578,7 +616,15 @@ fn view(state: &SplendirGui) -> Element<Message> {
         horizontal_space(),
         text(format!("Splendir v{}", VERSION))
             .size(12)
-            .color(iced::Color::from_rgb(0.5, 0.5, 0.5))
+            .color(iced::Color::from_rgb(0.5, 0.5, 0.5)),
+        Space::with_width(Length::Fixed(20.0)),
+        button(text("About").size(14))
+            .on_press(Message::ShowAbout)
+            .padding([5, 10]),
+        Space::with_width(Length::Fixed(10.0)),
+        button(text("Exit").size(14))
+            .on_press(Message::Exit)
+            .padding([5, 10]),
     ]
     .padding(10)
     .align_y(Alignment::Center);
@@ -590,11 +636,21 @@ fn view(state: &SplendirGui) -> Element<Message> {
     ]
     .spacing(0);
     
-    container(main_content)
+    let base_view = container(main_content)
         .width(Length::Fill)
         .height(Length::Fill)
-        .padding(20)
+        .padding(20);
+    
+    // If showing about dialog, overlay it on top
+    if state.show_about {
+        iced::widget::stack![
+            base_view,
+            view_about_dialog()
+        ]
         .into()
+    } else {
+        base_view.into()
+    }
 }
 
 fn subscription(state: &SplendirGui) -> iced::Subscription<Message> {
@@ -611,7 +667,8 @@ fn create_scanner(state: &SplendirGui) -> DirectoryScanner {
         .include_hidden(state.include_hidden)
         .follow_symlinks(state.follow_symlinks)
         .calculate_sha256(state.calculate_sha256)
-        .calculate_md5(state.calculate_md5);
+        .calculate_md5(state.calculate_md5)
+        .calculate_format(state.calculate_format);
     
     if let Ok(depth) = state.max_depth.parse::<usize>() {
         scanner = scanner.max_depth(depth);
@@ -689,6 +746,7 @@ fn view_options(state: &SplendirGui) -> Element<Message> {
             checkbox("Created", state.show_created).on_toggle(Message::ShowCreatedToggled),
             checkbox("Modified", state.show_modified).on_toggle(Message::ShowModifiedToggled),
             checkbox("Accessed", state.show_accessed).on_toggle(Message::ShowAccessedToggled),
+            checkbox("Format", state.show_format).on_toggle(Message::ShowFormatToggled),
             checkbox("MD5", state.calculate_md5).on_toggle(Message::CalculateMD5Toggled),
             checkbox("SHA256", state.calculate_sha256).on_toggle(Message::CalculateSHA256Toggled),
         ].spacing(8)
@@ -792,6 +850,9 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<Message> {
     if state.show_accessed {
         header_row = header_row.push(text("Accessed").width(Length::FillPortion(2)));
     }
+    if state.show_format {
+        header_row = header_row.push(text("Format").width(Length::FillPortion(2)));
+    }
     if state.calculate_md5 {
         header_row = header_row.push(text("MD5").width(Length::FillPortion(2)));
     }
@@ -837,6 +898,9 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<Message> {
             }
             if state.show_accessed {
                 data_row = data_row.push(text(&file.last_accessed).width(Length::FillPortion(2)).size(14));
+            }
+            if state.show_format {
+                data_row = data_row.push(text(&file.format).width(Length::FillPortion(2)).size(14));
             }
             if state.calculate_md5 {
                 data_row = data_row.push(text(if file.md5.len() > 12 { 
@@ -966,6 +1030,74 @@ fn view_analysis_results(state: &SplendirGui) -> Element<Message> {
     )
     .height(Length::Fill)
     .into()
+}
+
+fn view_about_dialog() -> Element<'static, Message> {
+    let about_text = format!(
+        "Splendir v{}\n\n\
+        A high-performance directory scanner with GUI and CLI interfaces.\n\n\
+        Features:\n\
+        • Detailed file listings with hash calculations (MD5, SHA256)\n\
+        • Tree view visualization of directory structures\n\
+        • Comprehensive directory analysis with statistics\n\
+        • Multiple scan presets for different use cases\n\
+        • Export results to CSV or text files\n\
+        • Parallel processing for fast scans\n\
+        • Virtual scrolling for handling millions of files\n\n\
+        Developed by Kam Woods\n\
+        Licensed under MIT\n\n\
+        GitHub: https://github.com/kamwoods/splendir",
+        VERSION
+    );
+    
+    // Semi-transparent dark overlay
+    let overlay = container(
+        container(
+            column![
+                text("About Splendir")
+                    .size(24)
+                    .color(iced::Color::WHITE),
+                Space::with_height(Length::Fixed(20.0)),
+                scrollable(
+                    text(about_text)
+                        .size(16)
+                        .color(iced::Color::from_rgb(0.9, 0.9, 0.9))
+                )
+                .height(Length::Fixed(400.0)),
+                Space::with_height(Length::Fixed(20.0)),
+                button(text("Close").size(16))
+                    .on_press(Message::CloseAbout)
+                    .padding([8, 20])
+                    .width(Length::Fixed(100.0)),
+            ]
+            .spacing(10)
+            .align_x(Alignment::Center)
+            .width(Length::Fixed(600.0))
+        )
+        .padding(30)
+        .style(|_theme| {
+            container::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(0.15, 0.15, 0.15))),
+                border: iced::Border {
+                    color: iced::Color::from_rgb(0.4, 0.4, 0.4),
+                    width: 2.0,
+                    radius: 10.0.into(),
+                },
+                ..Default::default()
+            }
+        })
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .center(Length::Fill)
+    .style(|_theme| {
+        container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7))),
+            ..Default::default()
+        }
+    });
+    
+    overlay.into()
 }
 
 // Flatten tree structure for efficient rendering
@@ -1139,6 +1271,7 @@ async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode, col
                 if columns.show_created { headers.push("Created"); }
                 if columns.show_modified { headers.push("Modified"); }
                 if columns.show_accessed { headers.push("Accessed"); }
+                if columns.show_format { headers.push("Format"); }
                 if columns.calculate_md5 { headers.push("MD5"); }
                 if columns.calculate_sha256 { headers.push("SHA256"); }
                 
@@ -1168,6 +1301,9 @@ async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode, col
                     }
                     if columns.show_accessed {
                         values.push(format!("\"{}\"", file_info.last_accessed));
+                    }
+                    if columns.show_format {
+                        values.push(format!("\"{}\"", file_info.format));
                     }
                     if columns.calculate_md5 {
                         values.push(format!("\"{}\"", file_info.md5));

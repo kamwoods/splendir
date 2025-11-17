@@ -22,6 +22,7 @@ pub struct FileInfo {
     pub last_accessed: String,
     pub md5: String,
     pub sha256: String,
+    pub format: String,
 }
 
 #[derive(Debug, Clone)]
