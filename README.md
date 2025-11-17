@@ -15,22 +15,22 @@ Features:
 - SHA256 and MD5 hash calculations on request
 - Hidden file and symlink traversal on request
 - File format identification
-- Export tree structures as ASCII text files
-- Export directory listings as CSV files
+- Export tree structures as UTF-8 encoded text files
+- Export directory listings as UTF-8 encoded CSV files
 
 Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). Multi-threading for hash calculations is handled by [rayon](https://github.com/rayon-rs/rayon).
 
-Splendir releases should be "feature complete" for the publicly described features, even in the current alpha releases. Splendir is a WIP, and the main branch of this repo may include untested development code that is subject to change.
+The Splendir GUI in the current alpha releases is "feature complete" for the publicly described features. The Splendir CLI is a work-in-progress and may lag behind. The main branch of this repo may include untested development code that is subject to change.
 
 ### Install
 
-The Splendir CLI and Splendir GUI are standalone executables. No installation is required. From the Releases section in the main GitHub repo you can download one of the following files:
+The Splendir GUI and Splendir CLI are standalone executables. No installation is required. From the Releases section in the main GitHub repo you can download one of the following files:
 
 - Linux executables: ```splendir-linux-x64.tar.gz``` or ```splendir-linux-x64.zip```
 - Windows executables: ```splendir-windows-x64.tar.gz``` or ```splendir-windows-x64.zip```
 - Mac executables: ```splendir-macos.tar.gz``` or ```splendir-macos.zip```
 
-Extract the files in a location of your choosing. In Linux, you can copy the ```splendir``` and ```splendir_gui``` files to ```/usr/local/bin``` to make them accessible. In Windows, you can simply double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell to use the command-line utility. Windows and macOS may generate warnings about an unknown or untrusted developer. Windows should include an option within the prompt to ```Run Anyway```. In macOS, you can click ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
+Extract the files in a location of your choosing. In Linux, you can copy the ```splendir_gui``` and ```splendir``` files to ```/usr/local/bin``` to make them accessible. In Windows, you can simply double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell to use the command-line utility. Windows and macOS may generate warnings about an unknown or untrusted developer. Windows should include an option within the prompt to ```Run Anyway```. In macOS, you can click ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
 
 ### Usage (GUI)
 
@@ -42,7 +42,7 @@ Both the **Directory Listing** view and **Tree View** are implemented with the a
 
 ![Splendir Tree Listing View](assets/sds-treeview.png)
 
-The **Detailed File List** view is exported as a comma-separated value file, and the **Tree View** is exported as an ASCII text file. Additional export options are planned for future releases.
+The **Detailed File List** view is exported as a comma-separated value file, and the **Tree View** is exported as a UTF-8 encoded text file. Additional export options are planned for future releases.
 
 ![Splendir Directory Analysis View](assets/sds-analysis.png)
 
@@ -99,7 +99,7 @@ Additional features are in progress.
 
 ### Build (Developers and Contributors)
 
-To build, ensure you are using Rust 1.88.0 or newer. To install Rust, follow the instructions at https://www.rust-lang.org/tools/install.
+To build, ensure you are using [Rust 1.88.0 or newer](https://www.rust-lang.org/tools/install).
 
 Clone this repo with the command:
 
@@ -113,7 +113,7 @@ cargo build --release
 
 ### Contributing
 
-Open an issue in this repo or send a PR. Additional info TBD.
+Open an issue in this repository to report bugs or request features, or open a PR to submit updates.
 
 ### License
 

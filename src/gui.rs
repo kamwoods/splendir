@@ -735,21 +735,29 @@ fn view_options(state: &SplendirGui) -> Element<Message> {
     ]
     .spacing(10);
     
-    // File Options section
+    // File Options section - two column layout
+    let file_options_col1 = column![
+        checkbox("File Name", state.show_filename).on_toggle(Message::ShowFilenameToggled),
+        checkbox("Path", state.show_path).on_toggle(Message::ShowPathToggled),
+        checkbox("Path + Name", state.show_path_name).on_toggle(Message::ShowPathNameToggled),
+        checkbox("Size", state.show_size).on_toggle(Message::ShowSizeToggled),
+        checkbox("Created", state.show_created).on_toggle(Message::ShowCreatedToggled),
+        checkbox("Modified", state.show_modified).on_toggle(Message::ShowModifiedToggled),
+        checkbox("Accessed", state.show_accessed).on_toggle(Message::ShowAccessedToggled),
+    ].spacing(8);
+    
+    let file_options_col2 = column![
+        checkbox("Format", state.show_format).on_toggle(Message::ShowFormatToggled),
+        checkbox("MD5", state.calculate_md5).on_toggle(Message::CalculateMD5Toggled),
+        checkbox("SHA256", state.calculate_sha256).on_toggle(Message::CalculateSHA256Toggled),
+    ].spacing(8);
+    
     let file_options_section = column![
         text("File Options").size(18).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
-        column![
-            checkbox("File Name", state.show_filename).on_toggle(Message::ShowFilenameToggled),
-            checkbox("Path", state.show_path).on_toggle(Message::ShowPathToggled),
-            checkbox("Path + Name", state.show_path_name).on_toggle(Message::ShowPathNameToggled),
-            checkbox("Size", state.show_size).on_toggle(Message::ShowSizeToggled),
-            checkbox("Created", state.show_created).on_toggle(Message::ShowCreatedToggled),
-            checkbox("Modified", state.show_modified).on_toggle(Message::ShowModifiedToggled),
-            checkbox("Accessed", state.show_accessed).on_toggle(Message::ShowAccessedToggled),
-            checkbox("Format", state.show_format).on_toggle(Message::ShowFormatToggled),
-            checkbox("MD5", state.calculate_md5).on_toggle(Message::CalculateMD5Toggled),
-            checkbox("SHA256", state.calculate_sha256).on_toggle(Message::CalculateSHA256Toggled),
-        ].spacing(8)
+        row![
+            file_options_col1,
+            file_options_col2,
+        ].spacing(15)
     ]
     .spacing(10);
     
@@ -1067,8 +1075,7 @@ fn view_about_dialog() -> Element<'static, Message> {
                 Space::with_height(Length::Fixed(20.0)),
                 button(text("Close").size(16))
                     .on_press(Message::CloseAbout)
-                    .padding([8, 20])
-                    .width(Length::Fixed(100.0)),
+                    .padding([8, 16]),
             ]
             .spacing(10)
             .align_x(Alignment::Center)
