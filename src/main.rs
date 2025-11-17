@@ -98,7 +98,7 @@ fn print_tree_mode(path: &Path, colorize: bool, fast_mode: bool) {
     let progress_callback = create_progress_callback();
     
     let tree_result = if fast_mode {
-        let scanner = ScannerPresets::fast();
+        let scanner = ScannerPresets::minimal();
         scanner.scan_tree_with_progress(path, Some(progress_callback))
     } else {
         scan_directory_tree_with_progress(path, progress_callback)
@@ -132,7 +132,7 @@ fn print_detailed_mode(path: &Path, fast_mode: bool) {
     let progress_callback = create_progress_callback();
     
     let files_result = if fast_mode {
-        let scanner = ScannerPresets::fast();
+        let scanner = ScannerPresets::minimal();
         scan_with_options_and_progress(path, scanner, progress_callback)
     } else {
         scan_directory_detailed_with_progress(path, progress_callback)

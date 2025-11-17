@@ -22,8 +22,8 @@ const APP_TITLE: &str = concat!("Splendir v", env!("CARGO_PKG_VERSION"));
 pub fn run() -> iced::Result {
     iced::application(APP_TITLE, update, view)
         .window(window::Settings {
-            // floats required in Iced 0.13
-            min_size: Some(iced::Size::new(1024.0, 768.0)),
+            size: iced::Size::new(1300.0, 850.0),
+            min_size: Some(iced::Size::new(900.0, 830.0)),
             ..Default::default()
         })
         .theme(|_| Theme::Dark)
@@ -55,17 +55,19 @@ impl std::fmt::Display for ScanMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ScanPreset {
     Default,
-    Fast,
+    DefaultMD5,
+    DefaultSHA256,
+    Minimal,
     Complete,
-    Security,
 }
 
 impl ScanPreset {
-    const ALL: [ScanPreset; 4] = [
+    const ALL: [ScanPreset; 5] = [
         ScanPreset::Default,
-        ScanPreset::Fast,
+        ScanPreset::DefaultMD5,
+        ScanPreset::DefaultSHA256,
+        ScanPreset::Minimal,
         ScanPreset::Complete,
-        ScanPreset::Security,
     ];
 }
 
@@ -73,9 +75,10 @@ impl std::fmt::Display for ScanPreset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ScanPreset::Default => write!(f, "Default"),
-            ScanPreset::Fast => write!(f, "Fast (No hashes)"),
-            ScanPreset::Complete => write!(f, "Complete (All features)"),
-            ScanPreset::Security => write!(f, "Security (With hashes)"),
+            ScanPreset::DefaultMD5 => write!(f, "Default+MD5"),
+            ScanPreset::DefaultSHA256 => write!(f, "Default+SHA256"),
+            ScanPreset::Minimal => write!(f, "Minimal"),
+            ScanPreset::Complete => write!(f, "Complete"),
         }
     }
 }
@@ -83,7 +86,19 @@ impl std::fmt::Display for ScanPreset {
 // Shared progress state for communication between threads
 type ProgressState = Arc<Mutex<Option<(f32, String)>>>;
 
-#[derive(Default)]
+#[derive(Debug, Clone)]
+struct ColumnVisibility {
+    show_filename: bool,
+    show_path: bool,
+    show_path_name: bool,
+    show_size: bool,
+    show_created: bool,
+    show_modified: bool,
+    show_accessed: bool,
+    calculate_md5: bool,
+    calculate_sha256: bool,
+}
+
 struct SplendirGui {
     // UI State
     selected_path: String,
@@ -91,10 +106,19 @@ struct SplendirGui {
     scan_preset: ScanPreset,
     include_hidden: bool,
     follow_symlinks: bool,
-    calculate_hashes: bool,
     calculate_md5: bool,
+    calculate_sha256: bool,
     colorize_output: bool,
     max_depth: String,
+    
+    // Column visibility
+    show_filename: bool,
+    show_path: bool,
+    show_path_name: bool,
+    show_size: bool,
+    show_created: bool,
+    show_modified: bool,
+    show_accessed: bool,
     
     // Scan State
     is_scanning: bool,
@@ -106,6 +130,9 @@ struct SplendirGui {
     
     // Error state
     error_message: Option<String>,
+    
+    // System messages (for non-critical info like export status)
+    system_message: Option<String>,
     
     // Progress tracking
     progress_state: Option<ProgressState>,
@@ -128,6 +155,42 @@ impl Default for ScanPreset {
     }
 }
 
+impl Default for SplendirGui {
+    fn default() -> Self {
+        Self {
+            selected_path: String::new(),
+            scan_mode: ScanMode::default(),
+            scan_preset: ScanPreset::default(),
+            include_hidden: false,
+            follow_symlinks: false,
+            calculate_md5: false,
+            calculate_sha256: false,
+            colorize_output: false,
+            max_depth: String::new(),
+            
+            // Default column visibility: File Name, Path, Size, Modified
+            show_filename: true,
+            show_path: true,
+            show_path_name: false,
+            show_size: true,
+            show_created: false,
+            show_modified: true,
+            show_accessed: false,
+            
+            is_scanning: false,
+            scan_progress: 0.0,
+            scan_status: String::new(),
+            scan_results: ScanResults::default(),
+            error_message: None,
+            system_message: None,
+            progress_state: None,
+            tree_scroll_offset: 0.0,
+            tree_flattened_cache: Vec::new(),
+            detail_scroll_offset: 0.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 struct ScanResults {
     detailed_files: Vec<FileInfo>,
@@ -147,10 +210,19 @@ enum Message {
     PresetSelected(ScanPreset),
     IncludeHiddenToggled(bool),
     FollowSymlinksToggled(bool),
-    CalculateHashesToggled(bool),
+    CalculateSHA256Toggled(bool),
     CalculateMD5Toggled(bool),
     ColorizeOutputToggled(bool),
     MaxDepthChanged(String),
+    
+    // Column visibility toggles
+    ShowFilenameToggled(bool),
+    ShowPathToggled(bool),
+    ShowPathNameToggled(bool),
+    ShowSizeToggled(bool),
+    ShowCreatedToggled(bool),
+    ShowModifiedToggled(bool),
+    ShowAccessedToggled(bool),
     
     // Scan Events
     StartScan,
@@ -203,35 +275,84 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             state.scan_preset = preset.clone();
             // Update options based on preset
             match preset {
-                ScanPreset::Fast => {
-                    state.calculate_hashes = false;
+                ScanPreset::Minimal => {
                     state.calculate_md5 = false;
-                    state.max_depth = "3".to_string();
+                    state.calculate_sha256 = false;
+                    // state.max_depth = "3".to_string();
+                    state.max_depth = String::new();
                     state.colorize_output = false;
+                    // Minimal: minimal columns
+                    state.show_filename = true;
+                    state.show_path = true;
+                    state.show_path_name = false;
+                    state.show_size = true;
+                    state.show_created = false;
+                    state.show_modified = false;
+                    state.show_accessed = false;
                 }
                 ScanPreset::Complete => {
                     state.include_hidden = true;
                     state.follow_symlinks = true;
-                    state.calculate_hashes = true;
                     state.calculate_md5 = true;
+                    state.calculate_sha256 = true;
                     state.max_depth = String::new();
                     state.colorize_output = false;
-                }
-                ScanPreset::Security => {
-                    state.include_hidden = true;
-                    state.follow_symlinks = false;
-                    state.calculate_hashes = true;
-                    state.calculate_md5 = true;
-                    state.max_depth = String::new();
-                    state.colorize_output = false;
+                    // Complete: all columns
+                    state.show_filename = true;
+                    state.show_path = true;
+                    state.show_path_name = true;
+                    state.show_size = true;
+                    state.show_created = true;
+                    state.show_modified = true;
+                    state.show_accessed = true;
                 }
                 ScanPreset::Default => {
                     state.include_hidden = false;
                     state.follow_symlinks = false;
-                    state.calculate_hashes = true;
                     state.calculate_md5 = false;
+                    state.calculate_sha256 = false;
                     state.max_depth = String::new();
                     state.colorize_output = false;
+                    // Default: File Name, Path, Size, Modified
+                    state.show_filename = true;
+                    state.show_path = true;
+                    state.show_path_name = false;
+                    state.show_size = true;
+                    state.show_created = false;
+                    state.show_modified = true;
+                    state.show_accessed = false;
+                }
+                ScanPreset::DefaultMD5 => {
+                    state.include_hidden = false;
+                    state.follow_symlinks = false;
+                    state.calculate_md5 = true;
+                    state.calculate_sha256 = false;
+                    state.max_depth = String::new();
+                    state.colorize_output = false;
+                    // Default: File Name, Path, Size, Modified
+                    state.show_filename = true;
+                    state.show_path = true;
+                    state.show_path_name = false;
+                    state.show_size = true;
+                    state.show_created = false;
+                    state.show_modified = true;
+                    state.show_accessed = false;
+                }
+                ScanPreset::DefaultSHA256 => {
+                    state.include_hidden = false;
+                    state.follow_symlinks = false;
+                    state.calculate_md5 = false;
+                    state.calculate_sha256 = true;
+                    state.max_depth = String::new();
+                    state.colorize_output = false;
+                    // Default: File Name, Path, Size, Modified
+                    state.show_filename = true;
+                    state.show_path = true;
+                    state.show_path_name = false;
+                    state.show_size = true;
+                    state.show_created = false;
+                    state.show_modified = true;
+                    state.show_accessed = false;
                 }
             }
         }
@@ -241,17 +362,38 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         Message::FollowSymlinksToggled(value) => {
             state.follow_symlinks = value;
         }
-        Message::CalculateHashesToggled(value) => {
-            state.calculate_hashes = value;
-        }
         Message::CalculateMD5Toggled(value) => {
             state.calculate_md5 = value;
+        }
+        Message::CalculateSHA256Toggled(value) => {
+            state.calculate_sha256 = value;
         }
         Message::ColorizeOutputToggled(value) => {
             state.colorize_output = value;
         }
         Message::MaxDepthChanged(value) => {
             state.max_depth = value;
+        }
+        Message::ShowFilenameToggled(value) => {
+            state.show_filename = value;
+        }
+        Message::ShowPathToggled(value) => {
+            state.show_path = value;
+        }
+        Message::ShowPathNameToggled(value) => {
+            state.show_path_name = value;
+        }
+        Message::ShowSizeToggled(value) => {
+            state.show_size = value;
+        }
+        Message::ShowCreatedToggled(value) => {
+            state.show_created = value;
+        }
+        Message::ShowModifiedToggled(value) => {
+            state.show_modified = value;
+        }
+        Message::ShowAccessedToggled(value) => {
+            state.show_accessed = value;
         }
         Message::StartScan => {
             if state.selected_path.is_empty() {
@@ -337,6 +479,17 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             
             let results = state.scan_results.clone();
             let mode = state.scan_mode.clone();
+            let columns = ColumnVisibility {
+                show_filename: state.show_filename,
+                show_path: state.show_path,
+                show_path_name: state.show_path_name,
+                show_size: state.show_size,
+                show_created: state.show_created,
+                show_modified: state.show_modified,
+                show_accessed: state.show_accessed,
+                calculate_md5: state.calculate_md5,
+                calculate_sha256: state.calculate_sha256,
+            };
             
             return Task::perform(
                 async move {
@@ -347,7 +500,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                         .save_file();
                     
                     if let Some(path) = file_dialog {
-                        export_results(path, results, mode).await
+                        export_results(path, results, mode, columns).await
                     } else {
                         Err("Export cancelled".to_string())
                     }
@@ -358,10 +511,13 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         Message::ExportComplete(result) => {
             match result {
                 Ok(path) => {
-                    state.scan_status = format!("Results exported to: {}", path);
+                    state.system_message = Some(format!("Results exported to: {}", path));
                 }
                 Err(error) => {
-                    state.error_message = Some(format!("Export failed: {}", error));
+                    // Don't show "Export cancelled" as an error
+                    if error != "Export cancelled" {
+                        state.system_message = Some(format!("Export failed: {}", error));
+                    }
                 }
             }
         }
@@ -381,24 +537,60 @@ fn view(state: &SplendirGui) -> Element<Message> {
     let options = view_options(state);
     let results = view_results(state);
     
+    // Options sidebar and main content area side by side
+    let main_row = row![
+        container(options).padding(20),
+        iced::widget::vertical_rule(1),
+        container(
+            if state.is_scanning {
+                container(view_progress(state)).padding(20)
+            } else if let Some(error) = &state.error_message {
+                container(
+                    text(error)
+                        .size(16)
+                        .color(iced::Color::from_rgb(0.8, 0.2, 0.2))
+                ).padding(20)
+            } else {
+                container(results).padding(20)
+            }
+        )
+        .width(Length::Fill)
+    ]
+    .spacing(0);
+    
     let content = column![
         header,
-        container(options).padding(20),
-        if state.is_scanning {
-            container(view_progress(state)).padding(20)
-        } else if let Some(error) = &state.error_message {
-            container(
-                text(error)
-                    .size(16)
-                    .color(iced::Color::from_rgb(0.8, 0.2, 0.2))
-            ).padding(20)
-        } else {
-            container(results).padding(20)
-        }
+        main_row,
     ]
     .spacing(10);
     
-    container(content)
+    // Bottom row with system messages on left and version on right
+    let message_text = if let Some(ref msg) = state.system_message {
+        format!("Messages: {}", msg)
+    } else {
+        "Messages:".to_string()
+    };
+    
+    let bottom_row = row![
+        text(message_text)
+            .size(12)
+            .color(iced::Color::from_rgb(0.7, 0.7, 0.7)),
+        horizontal_space(),
+        text(format!("Splendir v{}", VERSION))
+            .size(12)
+            .color(iced::Color::from_rgb(0.5, 0.5, 0.5))
+    ]
+    .padding(10)
+    .align_y(Alignment::Center);
+    
+    // Main content with bottom row
+    let main_content = column![
+        content,
+        bottom_row,
+    ]
+    .spacing(0);
+    
+    container(main_content)
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(20)
@@ -418,7 +610,7 @@ fn create_scanner(state: &SplendirGui) -> DirectoryScanner {
     let mut scanner = DirectoryScanner::new()
         .include_hidden(state.include_hidden)
         .follow_symlinks(state.follow_symlinks)
-        .calculate_sha(state.calculate_hashes)
+        .calculate_sha256(state.calculate_sha256)
         .calculate_md5(state.calculate_md5);
     
     if let Ok(depth) = state.max_depth.parse::<usize>() {
@@ -453,55 +645,67 @@ fn view_header(state: &SplendirGui) -> Element<Message> {
 }
 
 fn view_options(state: &SplendirGui) -> Element<Message> {
-    let mode_picker = pick_list(
-        &ScanMode::ALL[..],
-        Some(state.scan_mode.clone()),
-        Message::ScanModeSelected,
-    )
-    .placeholder("Select scan mode");
-    
-    let preset_picker = pick_list(
-        &ScanPreset::ALL[..],
-        Some(state.scan_preset.clone()),
-        Message::PresetSelected,
-    )
-    .placeholder("Select preset");
-    
-    let depth_input = text_input("Max depth", &state.max_depth)
-        .on_input(Message::MaxDepthChanged)
-        .width(Length::Fixed(100.0))
-        .padding(8);
-    
-    let options_row1 = row![
-        text("Mode:").size(16),
-        mode_picker,
-        horizontal_space(),
-        text("Preset:").size(16),
-        preset_picker,
-        horizontal_space(),
-        text("Max Depth:").size(16),
-        depth_input,
+    // Settings section
+    let settings_section = column![
+        text("Settings").size(18).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
+        column![
+            row![text("Mode:").width(80), pick_list(
+                &ScanMode::ALL[..],
+                Some(state.scan_mode.clone()),
+                Message::ScanModeSelected,
+            )].spacing(10),
+            row![text("Preset:").width(80), pick_list(
+                &ScanPreset::ALL[..],
+                Some(state.scan_preset.clone()),
+                Message::PresetSelected,
+            )].spacing(10),
+        ].spacing(10)
     ]
-    .spacing(10)
-    .align_y(Alignment::Center);
+    .spacing(10);
     
-    let options_row2 = row![
-        checkbox("Include hidden files", state.include_hidden).on_toggle(Message::IncludeHiddenToggled),
-        horizontal_space().width(20),
-        checkbox("Follow symlinks", state.follow_symlinks).on_toggle(Message::FollowSymlinksToggled),
-        horizontal_space().width(20),
-        checkbox("Calculate SHA256", state.calculate_hashes).on_toggle(Message::CalculateHashesToggled),
-        horizontal_space().width(20),
-        checkbox("Calculate MD5", state.calculate_md5).on_toggle(Message::CalculateMD5Toggled),
-        horizontal_space().width(20),
-        checkbox("Colorize output", state.colorize_output),
+    // Traversal Options section
+    let traversal_section = column![
+        text("Traversal Options").size(18).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
+        column![
+            checkbox("Include hidden files", state.include_hidden).on_toggle(Message::IncludeHiddenToggled),
+            checkbox("Follow symlinks", state.follow_symlinks).on_toggle(Message::FollowSymlinksToggled),
+            row![text("Max Depth:").width(80), text_input("", &state.max_depth)
+                .on_input(Message::MaxDepthChanged)
+                .width(Length::Fixed(100.0))
+                .padding(8)
+            ].spacing(10),
+        ].spacing(8)
     ]
-    .spacing(5)
-    .align_y(Alignment::Center);
+    .spacing(10);
     
-    column![options_row1, options_row2]
-        .spacing(15)
-        .into()
+    // File Options section
+    let file_options_section = column![
+        text("File Options").size(18).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
+        column![
+            checkbox("File Name", state.show_filename).on_toggle(Message::ShowFilenameToggled),
+            checkbox("Path", state.show_path).on_toggle(Message::ShowPathToggled),
+            checkbox("Path + Name", state.show_path_name).on_toggle(Message::ShowPathNameToggled),
+            checkbox("Size", state.show_size).on_toggle(Message::ShowSizeToggled),
+            checkbox("Created", state.show_created).on_toggle(Message::ShowCreatedToggled),
+            checkbox("Modified", state.show_modified).on_toggle(Message::ShowModifiedToggled),
+            checkbox("Accessed", state.show_accessed).on_toggle(Message::ShowAccessedToggled),
+            checkbox("MD5", state.calculate_md5).on_toggle(Message::CalculateMD5Toggled),
+            checkbox("SHA256", state.calculate_sha256).on_toggle(Message::CalculateSHA256Toggled),
+        ].spacing(8)
+    ]
+    .spacing(10);
+    
+    // Left sidebar with all options and horizontal separators
+    column![
+        settings_section,
+        iced::widget::horizontal_rule(1),
+        traversal_section,
+        iced::widget::horizontal_rule(1),
+        file_options_section,
+    ]
+    .spacing(20)
+    .width(Length::Fixed(300.0))
+    .into()
 }
 
 fn view_progress(state: &SplendirGui) -> Element<Message> {
@@ -565,16 +769,35 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<Message> {
     
     let file_count_text = text(format!("Total files: {}", total_files)).size(14);
     
-    let header = row![
-        text("File").width(Length::FillPortion(2)),
-        text("Path").width(Length::FillPortion(3)),
-        text("Size").width(Length::FillPortion(1)),
-        text("Modified").width(Length::FillPortion(2)),
-        text("MD5").width(Length::FillPortion(2)),
-        text("SHA256").width(Length::FillPortion(2)),
-    ]
-    .spacing(10)
-    .padding([10, 0]);
+    // Build header dynamically based on selected columns
+    let mut header_row = row![].spacing(10).padding([10, 0]);
+    if state.show_filename {
+        header_row = header_row.push(text("File").width(Length::FillPortion(2)));
+    }
+    if state.show_path {
+        header_row = header_row.push(text("Path").width(Length::FillPortion(3)));
+    }
+    if state.show_path_name {
+        header_row = header_row.push(text("Path + Name").width(Length::FillPortion(3)));
+    }
+    if state.show_size {
+        header_row = header_row.push(text("Size").width(Length::FillPortion(1)));
+    }
+    if state.show_created {
+        header_row = header_row.push(text("Created").width(Length::FillPortion(2)));
+    }
+    if state.show_modified {
+        header_row = header_row.push(text("Modified").width(Length::FillPortion(2)));
+    }
+    if state.show_accessed {
+        header_row = header_row.push(text("Accessed").width(Length::FillPortion(2)));
+    }
+    if state.calculate_md5 {
+        header_row = header_row.push(text("MD5").width(Length::FillPortion(2)));
+    }
+    if state.calculate_sha256 {
+        header_row = header_row.push(text("SHA256").width(Length::FillPortion(2)));
+    }
     
     // Calculate visible range
     let scroll_offset = state.detail_scroll_offset.max(0.0).min((total_height - VIEWPORT_HEIGHT).max(0.0));
@@ -592,27 +815,45 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<Message> {
     // Add visible rows
     for i in start_index..end_index {
         if let Some(file) = state.scan_results.detailed_files.get(i) {
-            let row = row![
-                text(&file.name).width(Length::FillPortion(2)).size(14),
-                text(&file.directory_path).width(Length::FillPortion(3)).size(14),
-                text(format_size(file.size)).width(Length::FillPortion(1)).size(14),
-                text(&file.last_modified).width(Length::FillPortion(2)).size(14),
-                text(if file.md5.len() > 12 { 
+            let mut data_row = row![].spacing(10).height(ROW_HEIGHT).align_y(Alignment::Center);
+            
+            if state.show_filename {
+                data_row = data_row.push(text(&file.name).width(Length::FillPortion(2)).size(14));
+            }
+            if state.show_path {
+                data_row = data_row.push(text(&file.directory_path).width(Length::FillPortion(3)).size(14));
+            }
+            if state.show_path_name {
+                data_row = data_row.push(text(&file.full_path).width(Length::FillPortion(3)).size(14));
+            }
+            if state.show_size {
+                data_row = data_row.push(text(format_size(file.size)).width(Length::FillPortion(1)).size(14));
+            }
+            if state.show_created {
+                data_row = data_row.push(text(&file.created).width(Length::FillPortion(2)).size(14));
+            }
+            if state.show_modified {
+                data_row = data_row.push(text(&file.last_modified).width(Length::FillPortion(2)).size(14));
+            }
+            if state.show_accessed {
+                data_row = data_row.push(text(&file.last_accessed).width(Length::FillPortion(2)).size(14));
+            }
+            if state.calculate_md5 {
+                data_row = data_row.push(text(if file.md5.len() > 12 { 
                     format!("{}...", &file.md5[..12]) 
                 } else { 
                     file.md5.clone() 
-                }).width(Length::FillPortion(2)).size(14),
-                text(if file.sha256.len() > 12 { 
+                }).width(Length::FillPortion(2)).size(14));
+            }
+            if state.calculate_sha256 {
+                data_row = data_row.push(text(if file.sha256.len() > 12 { 
                     format!("{}...", &file.sha256[..12]) 
                 } else { 
                     file.sha256.clone() 
-                }).width(Length::FillPortion(2)).size(14),
-            ]
-            .spacing(10)
-            .height(ROW_HEIGHT)
-            .align_y(Alignment::Center);
+                }).width(Length::FillPortion(2)).size(14));
+            }
             
-            viewport = viewport.push(row);
+            viewport = viewport.push(data_row);
         }
     }
     
@@ -624,7 +865,7 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<Message> {
     
     column![
         file_count_text,
-        header,
+        header_row,
         container(
             scrollable(viewport)
                 .height(VIEWPORT_HEIGHT)
@@ -879,7 +1120,7 @@ fn format_size(size: u64) -> String {
     format!("{:.1} {}", size_f, UNITS[unit_index])
 }
 
-async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode) -> Result<String, String> {
+async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode, columns: ColumnVisibility) -> Result<String, String> {
     use std::fs::File;
     use std::io::Write;
     
@@ -889,32 +1130,61 @@ async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode) -> 
         
         match mode {
             ScanMode::Detailed => {
-                // Export as CSV for detailed mode
-                writeln!(file, "Name,Path,Full Path,Size (bytes),Last Modified,MD5,SHA256")
+                // Build CSV header dynamically based on selected columns
+                let mut headers = Vec::new();
+                if columns.show_filename { headers.push("Name"); }
+                if columns.show_path { headers.push("Path"); }
+                if columns.show_path_name { headers.push("Full Path"); }
+                if columns.show_size { headers.push("Size (bytes)"); }
+                if columns.show_created { headers.push("Created"); }
+                if columns.show_modified { headers.push("Modified"); }
+                if columns.show_accessed { headers.push("Accessed"); }
+                if columns.calculate_md5 { headers.push("MD5"); }
+                if columns.calculate_sha256 { headers.push("SHA256"); }
+                
+                writeln!(file, "{}", headers.join(","))
                     .map_err(|e| format!("Failed to write header: {}", e))?;
                 
+                // Write data rows with only selected columns
                 for file_info in &results.detailed_files {
-                    writeln!(
-                        file,
-                        "\"{}\",\"{}\",\"{}\",{},\"{}\",\"{}\",\"{}\"",
-                        file_info.name.replace("\"", "\"\""),
-                        file_info.directory_path.replace("\"", "\"\""),
-                        file_info.full_path.replace("\"", "\"\""),
-                        file_info.size,
-                        file_info.last_modified,
-                        file_info.md5,
-                        file_info.sha256
-                    )
-                    .map_err(|e| format!("Failed to write data: {}", e))?;
+                    let mut values = Vec::new();
+                    if columns.show_filename {
+                        values.push(format!("\"{}\"", file_info.name.replace("\"", "\"\"")));
+                    }
+                    if columns.show_path {
+                        values.push(format!("\"{}\"", file_info.directory_path.replace("\"", "\"\"")));
+                    }
+                    if columns.show_path_name {
+                        values.push(format!("\"{}\"", file_info.full_path.replace("\"", "\"\"")));
+                    }
+                    if columns.show_size {
+                        values.push(file_info.size.to_string());
+                    }
+                    if columns.show_created {
+                        values.push(format!("\"{}\"", file_info.created));
+                    }
+                    if columns.show_modified {
+                        values.push(format!("\"{}\"", file_info.last_modified));
+                    }
+                    if columns.show_accessed {
+                        values.push(format!("\"{}\"", file_info.last_accessed));
+                    }
+                    if columns.calculate_md5 {
+                        values.push(format!("\"{}\"", file_info.md5));
+                    }
+                    if columns.calculate_sha256 {
+                        values.push(format!("\"{}\"", file_info.sha256));
+                    }
+                    
+                    writeln!(file, "{}", values.join(","))
+                        .map_err(|e| format!("Failed to write data: {}", e))?;
                 }
             }
             ScanMode::Tree => {
                 // Export tree as text
-                // Use the formatted output if available, otherwise format the tree node
                 let tree_text = if !results.tree_output.is_empty() {
                     results.tree_output
                 } else if let Some(ref tree_node) = results.tree_node {
-                    // Format tree without colorization for export
                     format_tree_output(tree_node, false)
                 } else {
                     String::from("No tree data available")

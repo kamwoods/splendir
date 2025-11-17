@@ -19,7 +19,7 @@ pub struct DirectoryScanner {
     pub include_hidden: bool,
     pub max_depth: Option<usize>,
     pub follow_symlinks: bool,
-    pub calculate_sha: bool,
+    pub calculate_sha256: bool,
     pub calculate_md5: bool,
 }
 
@@ -29,7 +29,7 @@ impl Default for DirectoryScanner {
             include_hidden: false,
             max_depth: None,
             follow_symlinks: false,
-            calculate_sha: true,
+            calculate_sha256: true,
             calculate_md5: false,
         }
     }
@@ -55,8 +55,8 @@ impl DirectoryScanner {
         self
     }
     
-    pub fn calculate_sha(mut self, calculate: bool) -> Self {
-        self.calculate_sha = calculate;
+    pub fn calculate_sha256(mut self, calculate: bool) -> Self {
+        self.calculate_sha256 = calculate;
         self
     }
     
@@ -122,14 +122,14 @@ impl DirectoryScanner {
         let processed_clone = processed.clone();
         
         // Process files in parallel
-        let calculate_sha = self.calculate_sha;
+        let calculate_sha256 = self.calculate_sha256;
         let calculate_md5 = self.calculate_md5;
         
         let file_infos: Vec<FileInfo> = file_paths
             .par_iter()
             .filter_map(|path| {
                 // Process the file
-                let result = process_file_with_hash_options(path, calculate_sha, calculate_md5);
+                let result = process_file_with_hash_options(path, calculate_sha256, calculate_md5);
                 
                 // Update progress (with throttling to avoid callback spam)
                 if let Some(ref callback) = progress_callback {
@@ -238,7 +238,7 @@ impl DirectoryScanner {
     
     /// Process a file with scanner options
     fn process_file_with_options(&self, path: &Path) -> io::Result<FileInfo> {
-        process_file_with_hash_options(path, self.calculate_sha, self.calculate_md5)
+        process_file_with_hash_options(path, self.calculate_sha256, self.calculate_md5)
     }
     
     /// Check if a file/directory should be included based on scanner settings
@@ -367,7 +367,17 @@ pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calcu
     
     let size = metadata.len();
     
+    let created = metadata.created()
+        .ok()
+        .and_then(|time| format_time_optional(time))
+        .unwrap_or_else(|| "N/A".to_string());
+    
     let last_modified = format_modified_time(metadata.modified()?);
+    
+    let last_accessed = metadata.accessed()
+        .ok()
+        .and_then(|time| format_time_optional(time))
+        .unwrap_or_else(|| "N/A".to_string());
     
     let (md5, sha256) = if calculate_sha256 || calculate_md5 {
         calculate_file_hashes(path, calculate_sha256, calculate_md5)?
@@ -380,7 +390,9 @@ pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calcu
         full_path,
         directory_path,
         size,
+        created,
         last_modified,
+        last_accessed,
         md5,
         sha256,
     })
@@ -470,6 +482,16 @@ fn format_modified_time(time: SystemTime) -> String {
             datetime.format("%Y-%m-%d %H:%M:%S").to_string()
         })
         .unwrap_or_else(|_| "Unknown".to_string())
+}
+
+/// Format a SystemTime as Option<String> (returns None on error)
+fn format_time_optional(time: SystemTime) -> Option<String> {
+    time.duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .and_then(|d| {
+            chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                .map(|datetime| datetime.format("%Y-%m-%d %H:%M:%S").to_string())
+        })
 }
 
 /// Format file size in human-readable form
