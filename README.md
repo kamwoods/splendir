@@ -6,15 +6,17 @@
 
 ### A High Performance Directory Scanner and Printer
 
-Splendir is a powerful directory scanner with GUI and CLI interfaces. Splendir tools generate tree views of files in a directory, annotated lists of files within a directory, and high-level reports of directory contents and file type distributions.
+Splendir is an extremely fast directory scanner with GUI and CLI interfaces. Splendir generates tree views of files in a directory, customizable lists of file metadata, and high-level reports of directory contents and file type distributions. Releases include executables for Windows (x64), Linux (x64), and macOS.
 
 Features:
-- Dynamically loaded live scrollable views of directories
-- Multi-threaded processing
+- Multiple scan presets
+- Virtual scrolling in tree and file list modes for live views of millions of files
+- Multi-threaded processing for high speed scans
 - SHA256 and MD5 hash calculations on request
 - Hidden file and symlink traversal on request
-- Export of tree structures as ASCII text files
-- Export of directory listings as CSV files
+- File format identification
+- Export tree structures as ASCII text files
+- Export directory listings as CSV files
 
 Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). Multi-threading for hash calculations is handled by [rayon](https://github.com/rayon-rs/rayon).
 
@@ -40,7 +42,7 @@ Both the **Directory Listing** view and **Tree View** are implemented with the a
 
 ![Splendir Tree Listing View](assets/sds-treeview.png)
 
-Currently, the **Detailed File List** view is exported as a comma-separated value file, and the **Tree View** is exported as a simple text file. Additional export options are planned for upcoming releases.
+The **Detailed File List** view is exported as a comma-separated value file, and the **Tree View** is exported as an ASCII text file. Additional export options are planned for future releases.
 
 ![Splendir Directory Analysis View](assets/sds-analysis.png)
 

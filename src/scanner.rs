@@ -21,6 +21,7 @@ pub struct DirectoryScanner {
     pub follow_symlinks: bool,
     pub calculate_sha256: bool,
     pub calculate_md5: bool,
+    pub calculate_format: bool,
 }
 
 impl Default for DirectoryScanner {
@@ -31,6 +32,7 @@ impl Default for DirectoryScanner {
             follow_symlinks: false,
             calculate_sha256: true,
             calculate_md5: false,
+            calculate_format: false,
         }
     }
 }
@@ -62,6 +64,11 @@ impl DirectoryScanner {
     
     pub fn calculate_md5(mut self, calculate: bool) -> Self {
         self.calculate_md5 = calculate;
+        self
+    }
+    
+    pub fn calculate_format(mut self, calculate: bool) -> Self {
+        self.calculate_format = calculate;
         self
     }
     
@@ -124,12 +131,13 @@ impl DirectoryScanner {
         // Process files in parallel
         let calculate_sha256 = self.calculate_sha256;
         let calculate_md5 = self.calculate_md5;
+        let calculate_format = self.calculate_format;
         
         let file_infos: Vec<FileInfo> = file_paths
             .par_iter()
             .filter_map(|path| {
                 // Process the file
-                let result = process_file_with_hash_options(path, calculate_sha256, calculate_md5);
+                let result = process_file_with_hash_options(path, calculate_sha256, calculate_md5, calculate_format);
                 
                 // Update progress (with throttling to avoid callback spam)
                 if let Some(ref callback) = progress_callback {
@@ -238,7 +246,7 @@ impl DirectoryScanner {
     
     /// Process a file with scanner options
     fn process_file_with_options(&self, path: &Path) -> io::Result<FileInfo> {
-        process_file_with_hash_options(path, self.calculate_sha256, self.calculate_md5)
+        process_file_with_hash_options(path, self.calculate_sha256, self.calculate_md5, self.calculate_format)
     }
     
     /// Check if a file/directory should be included based on scanner settings
@@ -341,16 +349,16 @@ pub fn validate_path(path: &Path) -> Result<(), ScanError> {
 
 /// Process a single file and extract its information (with SHA256)
 pub fn process_file(path: &Path) -> io::Result<FileInfo> {
-    process_file_with_hash_options(path, true, false)
+    process_file_with_hash_options(path, true, false, false)
 }
 
 /// Process a single file without calculating SHA256 (faster)
 pub fn process_file_no_hash(path: &Path) -> io::Result<FileInfo> {
-    process_file_with_hash_options(path, false, false)
+    process_file_with_hash_options(path, false, false, false)
 }
 
 /// Process a file with configurable hash options
-pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calculate_md5: bool) -> io::Result<FileInfo> {
+pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calculate_md5: bool, calculate_format: bool) -> io::Result<FileInfo> {
     let metadata = fs::metadata(path)?;
     
     let name = path.file_name()
@@ -385,6 +393,12 @@ pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calcu
         (String::from("Not calculated"), String::from("Not calculated"))
     };
     
+    let format = if calculate_format {
+        identify_format(path).unwrap_or_else(|| "Unknown".to_string())
+    } else {
+        String::from("Not calculated")
+    };
+    
     Ok(FileInfo {
         name,
         full_path,
@@ -395,6 +409,7 @@ pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calcu
         last_accessed,
         md5,
         sha256,
+        format,
     })
 }
 
@@ -530,4 +545,10 @@ pub fn quick_directory_count(path: &Path) -> io::Result<(usize, usize)> {
     }
     
     Ok((file_count, dir_count))
+}
+
+/// Identify file format using file-format crate
+fn identify_format(path: &Path) -> Option<String> {
+    let format = file_format::FileFormat::from_file(path).ok()?;
+    Some(format.name().to_string())
 }
