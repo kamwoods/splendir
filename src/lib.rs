@@ -17,7 +17,9 @@ pub struct FileInfo {
     pub full_path: String,
     pub directory_path: String,
     pub size: u64,
+    pub created: String,
     pub last_modified: String,
+    pub last_accessed: String,
     pub md5: String,
     pub sha256: String,
 }
@@ -96,7 +98,7 @@ pub fn scan_directory_tree_with_progress(
 
 /// Quick scan without SHA256 calculation for faster results
 pub fn scan_directory_quick(path: &Path) -> Result<Vec<FileInfo>, ScanError> {
-    let scanner = DirectoryScanner::new().calculate_sha(false);
+    let scanner = DirectoryScanner::new().calculate_sha256(false);
     scanner.scan_detailed(path)
 }
 
@@ -105,7 +107,7 @@ pub fn scan_directory_quick_with_progress(
     path: &Path,
     progress_callback: ProgressCallback
 ) -> Result<Vec<FileInfo>, ScanError> {
-    let scanner = DirectoryScanner::new().calculate_sha(false);
+    let scanner = DirectoryScanner::new().calculate_sha256(false);
     scanner.scan_detailed_with_progress(path, Some(progress_callback))
 }
 
@@ -285,12 +287,12 @@ fn collect_files_by_type<'a>(node: &'a TreeNode, target_type: FileType, files: &
 pub struct ScannerPresets;
 
 impl ScannerPresets {
-    /// Fast scan for large directories (no hashes, limited depth)
-    pub fn fast() -> DirectoryScanner {
+    /// Minimal scan for large directories (no hashes, minimal file info)
+    pub fn minimal() -> DirectoryScanner {
         DirectoryScanner::new()
-            .calculate_sha(false)
             .calculate_md5(false)
-            .max_depth(3)
+            .calculate_sha256(false)
+            // .max_depth(3)
     }
     
     /// Complete scan with all features enabled
@@ -298,25 +300,25 @@ impl ScannerPresets {
         DirectoryScanner::new()
             .include_hidden(true)
             .follow_symlinks(true)
-            .calculate_sha(true)
             .calculate_md5(true)
+            .calculate_sha256(true)
     }
-    
-    /// Security scan (includes hidden files, calculates hashes)
-    pub fn security() -> DirectoryScanner {
+   
+    /// Default scan with MD5 enabled
+    pub fn defaultmd5() -> DirectoryScanner {
         DirectoryScanner::new()
-            .include_hidden(true)
-            .calculate_sha(true)
-            .calculate_md5(true)
-            .follow_symlinks(false)
-    }
-    
-    /// GUI preview scan (fast, reasonable depth)
-    pub fn gui_preview() -> DirectoryScanner {
-        DirectoryScanner::new()
-            .calculate_sha(false)
-            .calculate_md5(false)
-            .max_depth(5)
             .include_hidden(false)
+            .follow_symlinks(false)
+            .calculate_md5(true)
+            .calculate_sha256(false)
+    }
+
+    /// Default scan with SHA256 enabled
+    pub fn defaultsha256() -> DirectoryScanner {
+        DirectoryScanner::new()
+            .include_hidden(false)
+            .follow_symlinks(false)
+            .calculate_md5(false)
+            .calculate_sha256(true)
     }
 }
