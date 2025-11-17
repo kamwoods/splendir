@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, checkbox, column, container, horizontal_space, pick_list, progress_bar, row, scrollable, stack, text, text_input, Column, Space},
+    widget::{button, checkbox, column, container, horizontal_space, pick_list, progress_bar, radio, row, scrollable, stack, text, text_input, Column, Space},
     Alignment, Element, Length, Theme, Task, Font, time,
 };
 use iced::window;
@@ -22,7 +22,7 @@ const APP_TITLE: &str = concat!("Splendir v", env!("CARGO_PKG_VERSION"));
 pub fn run() -> iced::Result {
     iced::application(APP_TITLE, update, view)
         .window(window::Settings {
-            size: iced::Size::new(1300.0, 850.0),
+            size: iced::Size::new(1350.0, 900.0),
             min_size: Some(iced::Size::new(900.0, 830.0)),
             ..Default::default()
         })
@@ -83,6 +83,55 @@ impl std::fmt::Display for ScanPreset {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SortBy {
+    TreeDefault,
+    FileName,
+    Size,
+    Created,
+    Accessed,
+    Modified,
+}
+
+impl SortBy {
+    const ALL: [SortBy; 6] = [
+        SortBy::TreeDefault,
+        SortBy::FileName,
+        SortBy::Size,
+        SortBy::Created,
+        SortBy::Accessed,
+        SortBy::Modified,
+    ];
+}
+
+impl std::fmt::Display for SortBy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SortBy::TreeDefault => write!(f, "Tree (Default)"),
+            SortBy::FileName => write!(f, "File Name"),
+            SortBy::Size => write!(f, "Size"),
+            SortBy::Created => write!(f, "Created"),
+            SortBy::Accessed => write!(f, "Accessed"),
+            SortBy::Modified => write!(f, "Modified"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SortOrder {
+    Ascending,
+    Descending,
+}
+
+impl std::fmt::Display for SortOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SortOrder::Ascending => write!(f, "Ascending"),
+            SortOrder::Descending => write!(f, "Descending"),
+        }
+    }
+}
+
 // Shared progress state for communication between threads
 type ProgressState = Arc<Mutex<Option<(f32, String)>>>;
 
@@ -122,6 +171,10 @@ struct SplendirGui {
     show_accessed: bool,
     show_format: bool,
     calculate_format: bool,
+    
+    // Sort options
+    sort_by: SortBy,
+    sort_order: SortOrder,
     
     // Scan State
     is_scanning: bool,
@@ -185,6 +238,10 @@ impl Default for SplendirGui {
             show_format: false,
             calculate_format: false,
             
+            // Sort options
+            sort_by: SortBy::TreeDefault,
+            sort_order: SortOrder::Ascending,
+            
             is_scanning: false,
             scan_progress: 0.0,
             scan_status: String::new(),
@@ -203,6 +260,7 @@ impl Default for SplendirGui {
 #[derive(Debug, Clone, Default)]
 struct ScanResults {
     detailed_files: Vec<FileInfo>,
+    original_order: Vec<FileInfo>, // Preserve original scan order
     tree_node: Option<TreeNode>,
     tree_output: String,
     analysis_output: String,
@@ -233,6 +291,10 @@ enum Message {
     ShowModifiedToggled(bool),
     ShowAccessedToggled(bool),
     ShowFormatToggled(bool),
+    
+    // Sort options
+    SortBySelected(SortBy),
+    SortOrderSelected(SortOrder),
     
     // Scan Events
     StartScan,
@@ -423,6 +485,30 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             state.show_format = value;
             state.calculate_format = value;
         }
+        Message::SortBySelected(sort_by) => {
+            state.sort_by = sort_by;
+            // Re-sort existing results if we have them
+            if !state.scan_results.detailed_files.is_empty() {
+                sort_files(
+                    &mut state.scan_results.detailed_files, 
+                    &state.scan_results.original_order,
+                    state.sort_by, 
+                    state.sort_order
+                );
+            }
+        }
+        Message::SortOrderSelected(sort_order) => {
+            state.sort_order = sort_order;
+            // Re-sort existing results if we have them
+            if !state.scan_results.detailed_files.is_empty() {
+                sort_files(
+                    &mut state.scan_results.detailed_files, 
+                    &state.scan_results.original_order,
+                    state.sort_by, 
+                    state.sort_order
+                );
+            }
+        }
         Message::StartScan => {
             if state.selected_path.is_empty() {
                 state.error_message = Some("Please select a directory to scan".to_string());
@@ -476,8 +562,14 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                 }
             }
         }
-        Message::ScanComplete(results) => {
+        Message::ScanComplete(mut results) => {
             state.is_scanning = false;
+            
+            // Save original order before any sorting
+            results.original_order = results.detailed_files.clone();
+            
+            // Sort files if we're not using tree default
+            sort_files(&mut results.detailed_files, &results.original_order, state.sort_by, state.sort_order);
             
             // Update tree cache regardless of current mode (since we now have tree data)
             if let Some(ref tree_node) = results.tree_node {
@@ -761,6 +853,29 @@ fn view_options(state: &SplendirGui) -> Element<Message> {
     ]
     .spacing(10);
     
+    // Sort Options section
+    let sort_options_section = column![
+        text("Sort Options").size(18).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
+        pick_list(
+            &SortBy::ALL[..],
+            Some(state.sort_by),
+            Message::SortBySelected
+        ),
+        iced::widget::radio(
+            "Ascending",
+            SortOrder::Ascending,
+            Some(state.sort_order),
+            Message::SortOrderSelected
+        ),
+        iced::widget::radio(
+            "Descending",
+            SortOrder::Descending,
+            Some(state.sort_order),
+            Message::SortOrderSelected
+        ),
+    ]
+    .spacing(10);
+    
     // Left sidebar with all options and horizontal separators
     column![
         settings_section,
@@ -768,6 +883,8 @@ fn view_options(state: &SplendirGui) -> Element<Message> {
         traversal_section,
         iced::widget::horizontal_rule(1),
         file_options_section,
+        iced::widget::horizontal_rule(1),
+        sort_options_section,
     ]
     .spacing(20)
     .width(Length::Fixed(300.0))
@@ -1347,4 +1464,33 @@ async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode, col
     })
     .await
     .map_err(|e| format!("Export task failed: {}", e))?
+}
+
+/// Sort files based on sort criteria
+fn sort_files(files: &mut Vec<FileInfo>, original_order: &[FileInfo], sort_by: SortBy, sort_order: SortOrder) {
+    // Restore original order if using tree default
+    if sort_by == SortBy::TreeDefault {
+        *files = original_order.to_vec();
+        // Reverse if descending
+        if sort_order == SortOrder::Descending {
+            files.reverse();
+        }
+        return;
+    }
+    
+    files.sort_by(|a, b| {
+        let cmp = match sort_by {
+            SortBy::TreeDefault => std::cmp::Ordering::Equal, // Already handled above
+            SortBy::FileName => a.name.cmp(&b.name),
+            SortBy::Size => a.size.cmp(&b.size),
+            SortBy::Created => a.created.cmp(&b.created),
+            SortBy::Accessed => a.last_accessed.cmp(&b.last_accessed),
+            SortBy::Modified => a.last_modified.cmp(&b.last_modified),
+        };
+        
+        match sort_order {
+            SortOrder::Ascending => cmp,
+            SortOrder::Descending => cmp.reverse(),
+        }
+    });
 }

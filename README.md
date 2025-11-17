@@ -11,10 +11,11 @@ Splendir is an extremely fast directory scanner with GUI and CLI interfaces. Spl
 Features:
 - Multiple scan presets
 - Virtual scrolling in tree and file list modes for live views of millions of files
+- Live sorting of output in file list view
 - Multi-threaded processing for high speed scans
 - SHA256 and MD5 hash calculations on request
 - Hidden file and symlink traversal on request
-- File format identification
+- File format identification on request
 - Export tree structures as UTF-8 encoded text files
 - Export directory listings as UTF-8 encoded CSV files
 
@@ -38,11 +39,11 @@ Click the **Browse...** button to select a local directory. Click the **Start Sc
 
 ![Splendir Directory Listing View](assets/sds-dirview.png)
 
-Both the **Directory Listing** view and **Tree View** are implemented with the appropriate data structures and virtual scrolling features to allow viewing directories of any size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to any point in the output to inspect and review before exporting.
+Both the **Directory Listing** view and **Tree View** are implemented with the appropriate data structures and virtual scrolling features to allow viewing directories of any size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to any point in the output to inspect and review before exporting. You can also adjust the Sort Options to instantly view and export sorted results without having to rescan.
 
 ![Splendir Tree Listing View](assets/sds-treeview.png)
 
-The **Detailed File List** view is exported as a comma-separated value file, and the **Tree View** is exported as a UTF-8 encoded text file. Additional export options are planned for future releases.
+The **Detailed File List** view is exported as a UTF-8 encoded CSV file (this can be conveniently viewed in a spreadsheet), and the **Tree View** is exported as a UTF-8 encoded text file. Additional export options are planned for future releases.
 
 ![Splendir Directory Analysis View](assets/sds-analysis.png)
 
