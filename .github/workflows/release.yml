@@ -38,7 +38,6 @@ jobs:
           chmod +x packages/linux/splendir packages/linux/splendir_gui
 
           tar -czvf packages/splendir-linux-x64.tar.gz -C packages/linux .
-          zip -j packages/splendir-linux-x64.zip packages/linux/*
 
       # -------------------------------------------------------
       # Create .deb package
@@ -80,7 +79,6 @@ jobs:
           chmod +x packages/macos/splendir packages/macos/splendir_gui
 
           tar -czvf packages/splendir-macos.tar.gz -C packages/macos .
-          zip -j packages/splendir-macos.zip packages/macos/*
 
       # -------------------------------------------------------
       # Windows Packaging (x64)
@@ -91,7 +89,6 @@ jobs:
           cp artifacts/splendir_gui-windows-latest/splendir_gui.exe packages/windows/
 
           tar -czvf packages/splendir-windows-x64.tar.gz -C packages/windows .
-          zip -j packages/splendir-windows-x64.zip packages/windows/*
 
       # -------------------------------------------------------
       # SHA256 Checksums
@@ -99,7 +96,7 @@ jobs:
       - name: Generate SHA256 checksums
         run: |
           cd packages
-          for file in *.tar.gz *.zip *.deb; do
+          for file in *.tar.gz *.deb; do
             sha256sum "$file" > "../checksums/$file.sha256"
           done
 
@@ -112,11 +109,8 @@ jobs:
           generate_release_notes: true
           files: |
             packages/splendir-linux-x64.tar.gz
-            packages/splendir-linux-x64.zip
             packages/splendir-macos.tar.gz
-            packages/splendir-macos.zip
             packages/splendir-windows-x64.tar.gz
-            packages/splendir-windows-x64.zip
             packages/splendir-x64.deb
             checksums/*.sha256
         env:

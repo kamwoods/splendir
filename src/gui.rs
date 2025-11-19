@@ -22,8 +22,8 @@ const APP_TITLE: &str = concat!("Splendir v", env!("CARGO_PKG_VERSION"));
 pub fn run() -> iced::Result {
     iced::application(APP_TITLE, update, view)
         .window(window::Settings {
-            size: iced::Size::new(1350.0, 900.0),
-            min_size: Some(iced::Size::new(900.0, 830.0)),
+            size: iced::Size::new(1150.0, 770.0),
+            min_size: Some(iced::Size::new(900.0, 700.0)),
             ..Default::default()
         })
         .theme(|_| Theme::Dark)
@@ -107,7 +107,7 @@ impl SortBy {
 impl std::fmt::Display for SortBy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SortBy::TreeDefault => write!(f, "Tree (Default)"),
+            SortBy::TreeDefault => write!(f, "Default"),
             SortBy::FileName => write!(f, "File Name"),
             SortBy::Size => write!(f, "Size"),
             SortBy::Created => write!(f, "Created"),
@@ -677,7 +677,7 @@ fn view(state: &SplendirGui) -> Element<Message> {
             } else if let Some(error) = &state.error_message {
                 container(
                     text(error)
-                        .size(16)
+                        .size(14)
                         .color(iced::Color::from_rgb(0.8, 0.2, 0.2))
                 ).padding(20)
             } else {
@@ -731,7 +731,7 @@ fn view(state: &SplendirGui) -> Element<Message> {
     let base_view = container(main_content)
         .width(Length::Fill)
         .height(Length::Fill)
-        .padding(20);
+        .padding(15);
     
     // If showing about dialog, overlay it on top
     if state.show_about {
@@ -773,7 +773,7 @@ fn view_header(state: &SplendirGui) -> Element<Message> {
     let path_input = text_input("Select a directory to scan...", &state.selected_path)
         .on_input(Message::PathChanged)
         .padding(10)
-        .size(16);
+        .size(14);
     
     let browse_button = button("Browse...")
         .on_press(Message::BrowsePressed)
@@ -796,7 +796,7 @@ fn view_header(state: &SplendirGui) -> Element<Message> {
 fn view_options(state: &SplendirGui) -> Element<Message> {
     // Settings section
     let settings_section = column![
-        text("Settings").size(18).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
+        text("Settings").size(16).font(Font { weight: iced::font::Weight::Bold, ..Font::default() }).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
         column![
             row![text("Mode:").width(80), pick_list(
                 &ScanMode::ALL[..],
@@ -814,7 +814,7 @@ fn view_options(state: &SplendirGui) -> Element<Message> {
     
     // Traversal Options section
     let traversal_section = column![
-        text("Traversal Options").size(18).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
+        text("Traversal Options").size(16).font(Font { weight: iced::font::Weight::Bold, ..Font::default() }).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
         column![
             checkbox("Include hidden files", state.include_hidden).on_toggle(Message::IncludeHiddenToggled),
             checkbox("Follow symlinks", state.follow_symlinks).on_toggle(Message::FollowSymlinksToggled),
@@ -845,7 +845,7 @@ fn view_options(state: &SplendirGui) -> Element<Message> {
     ].spacing(8);
     
     let file_options_section = column![
-        text("File Options").size(18).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
+        text("File Options").size(16).font(Font { weight: iced::font::Weight::Bold, ..Font::default() }).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
         row![
             file_options_col1,
             file_options_col2,
@@ -855,39 +855,45 @@ fn view_options(state: &SplendirGui) -> Element<Message> {
     
     // Sort Options section
     let sort_options_section = column![
-        text("Sort Options").size(18).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
-        pick_list(
-            &SortBy::ALL[..],
-            Some(state.sort_by),
-            Message::SortBySelected
-        ),
-        iced::widget::radio(
-            "Ascending",
-            SortOrder::Ascending,
-            Some(state.sort_order),
-            Message::SortOrderSelected
-        ),
-        iced::widget::radio(
-            "Descending",
-            SortOrder::Descending,
-            Some(state.sort_order),
-            Message::SortOrderSelected
-        ),
+        text("Sort Options").size(16).font(Font { weight: iced::font::Weight::Bold, ..Font::default() }).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
+        row![
+            pick_list(
+                &SortBy::ALL[..],
+                Some(state.sort_by),
+                Message::SortBySelected
+            ),
+            column![
+                iced::widget::radio(
+                    "Ascending",
+                    SortOrder::Ascending,
+                    Some(state.sort_order),
+                    Message::SortOrderSelected
+                ),
+                iced::widget::radio(
+                    "Descending",
+                    SortOrder::Descending,
+                    Some(state.sort_order),
+                    Message::SortOrderSelected
+                ),
+            ].spacing(5)
+        ].spacing(10)
     ]
     .spacing(10);
     
-    // Left sidebar with all options and horizontal separators
-    column![
-        settings_section,
-        iced::widget::horizontal_rule(1),
-        traversal_section,
-        iced::widget::horizontal_rule(1),
-        file_options_section,
-        iced::widget::horizontal_rule(1),
-        sort_options_section,
-    ]
-    .spacing(20)
-    .width(Length::Fixed(300.0))
+    // Left sidebar with all options and horizontal separators - make scrollable
+    scrollable(
+        column![
+            settings_section,
+            iced::widget::horizontal_rule(1),
+            traversal_section,
+            iced::widget::horizontal_rule(1),
+            file_options_section,
+            iced::widget::horizontal_rule(1),
+            sort_options_section,
+        ]
+        .spacing(10)
+    )
+    .width(Length::Fixed(285.0))
     .into()
 }
 
@@ -906,14 +912,14 @@ fn view_results(state: &SplendirGui) -> Element<Message> {
         && state.scan_results.analysis_output.is_empty() {
         return container(
             text("No scan results yet. Select a directory and click 'Start Scan'.")
-                .size(16)
+                .size(14)
                 .color(iced::Color::from_rgb(0.5, 0.5, 0.5))
         )
         .into();
     }
     
     let status_row = row![
-        text(&state.scan_status).size(16),
+        text(&state.scan_status).size(14),
         horizontal_space(),
         button("Export Results")
             .on_press(Message::ExportResults)
@@ -1151,7 +1157,7 @@ fn view_analysis_results(state: &SplendirGui) -> Element<Message> {
     
     scrollable(
         text(&state.scan_results.analysis_output)
-            .size(16)
+            .size(14)
     )
     .height(Length::Fill)
     .into()
@@ -1185,12 +1191,12 @@ fn view_about_dialog() -> Element<'static, Message> {
                 Space::with_height(Length::Fixed(20.0)),
                 scrollable(
                     text(about_text)
-                        .size(16)
+                        .size(14)
                         .color(iced::Color::from_rgb(0.9, 0.9, 0.9))
                 )
                 .height(Length::Fixed(400.0)),
                 Space::with_height(Length::Fixed(20.0)),
-                button(text("Close").size(16))
+                button(text("Close").size(14))
                     .on_press(Message::CloseAbout)
                     .padding([8, 16]),
             ]
@@ -1198,7 +1204,7 @@ fn view_about_dialog() -> Element<'static, Message> {
             .align_x(Alignment::Center)
             .width(Length::Fixed(600.0))
         )
-        .padding(30)
+        .padding(20)
         .style(|_theme| {
             container::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgb(0.15, 0.15, 0.15))),

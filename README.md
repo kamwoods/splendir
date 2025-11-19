@@ -6,7 +6,7 @@
 
 ### A High Performance Directory Scanner and Printer
 
-Splendir is an extremely fast directory scanner with GUI and CLI interfaces. Splendir generates tree views of files in a directory, customizable lists of file metadata, and high-level reports of directory contents and file type distributions. Releases include executables for Windows (x64), Linux (x64), and macOS.
+Splendir is an extremely fast directory scanner with GUI and CLI interfaces. Splendir generates tree views of files in a directory, customizable lists of file metadata, and high-level reports of directory contents and file type distributions. Releases include executables for Linux (x64) distros, Windows 11 (x64), and macOS (Apple M-series silicon).
 
 Features:
 - Multiple scan presets
@@ -27,19 +27,43 @@ The Splendir GUI in the current alpha releases is "feature complete" for the pub
 
 The Splendir GUI and Splendir CLI are standalone executables. No installation is required. From the Releases section in the main GitHub repo you can download one of the following files:
 
-- Linux executables: ```splendir-linux-x64.tar.gz``` or ```splendir-linux-x64.zip```
-- Windows executables: ```splendir-windows-x64.tar.gz``` or ```splendir-windows-x64.zip```
-- Mac executables: ```splendir-macos.tar.gz``` or ```splendir-macos.zip```
+- Linux executables: ```splendir-linux-x64.tar.gz```
+- Windows executables: ```splendir-windows-x64.tar.gz```
+- Mac executables: ```splendir-macos.tar.gz```
 
-Extract the files in a location of your choosing. In Linux, you can copy the ```splendir_gui``` and ```splendir``` files to ```/usr/local/bin``` to make them accessible. In Windows, you can simply double-click on ```splendir_gui.exe``` to run it, or run ```splendir.exe``` from PowerShell to use the command-line utility. Windows and macOS may generate warnings about an unknown or untrusted developer. Windows should include an option within the prompt to ```Run Anyway```. In macOS, you can click ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
+**Linux**
+
+In a terminal, navigate to your download directory and extract the .tar.gz file:
+
+```
+cd /your/download/directory
+tar zxvf splendir-linux-x64.tar.gz
+```
+
+Copy the executables to ```/usr/local/bin```:
+
+```
+sudo cp splendir_gui /usr/local/bin
+sudo cp splendir /usr/local/bin
+```
+
+You can now run the GUI (or the CLI) by typing ```splendir_gui``` or ```splendir``` in the terminal and hitting enter.
+
+**Windows 11**
+
+Double-click to extract the ```splendir-windows-x64.tar.gz```. Double-click on ```splendir_gui.exe``` to run the GUI, or run ```splendir.exe``` from PowerShell to use the command-line utility. Depending on your Windows installation, you may get a warning that the ```Visual Studio C++ Redistributable``` package needs to be installed first. Windows will also generate a warning pop-up window about an unknown developer when running the GUI. Click ```More info``` and select ```Run Anyway``` to run the GUI.
+
+**macOS**
+
+Extract the ```splendir-macos.tar.gz``` file in your location of choice. Double-clicking on ```splendir_gui``` will generate an untrusted application warning. Click on ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
 
 ### Usage (GUI)
 
-Click the **Browse...** button to select a local directory. Click the **Start Scan** button to begin a scan once you have selected a directory. The **Mode:** dropdown can be set to **Detailed File List** (a columnar list of files), **Tree View** (a graphical tree view similar to the command-line tool "tree"), or **Directory Analysis** (a high-level overview of the directory contents). All three views are generated when you click **Start Scan**. When a scan is complete, an **Export** button will appear to allow export of the content.
+Click the **Browse...** button to select a local directory. Click the **Start Scan** button to begin a scan once you have selected a directory. The **Mode:** dropdown can be set to **Detailed File List** (outputs a file list with metadata), **Tree View** (outputs a graphical tree view similar to the command-line tool "tree"), or **Directory Analysis** (a high-level overview of the directory contents). All three views are generated when **Start Scan** is clicked. When a scan is complete, an **Export** button will appear to allow export of the content. If **Detailed File List** is currently selected, clicking **Export** will generate a CSV file. If **Tree View** is selected, it will generate a UTF-8 text representation of the tree.
 
 ![Splendir Directory Listing View](assets/sds-dirview.png)
 
-Both the **Directory Listing** view and **Tree View** are implemented with the appropriate data structures and virtual scrolling features to allow viewing directories of any size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to any point in the output to inspect and review before exporting. You can also adjust the Sort Options to instantly view and export sorted results without having to rescan.
+Both the **Directory Listing** view and **Tree View** are implemented with a virtual scrolling feature to provide live views of directories of any size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to any point in the output to inspect and review before exporting. You can also adjust the Sort Options to instantly view and export sorted results without having to rescan. The **Default** sort optioncorresponds to an alphabetized directory walk (all subdirectory entries grouped together at each level).
 
 ![Splendir Tree Listing View](assets/sds-treeview.png)
 
