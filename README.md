@@ -27,22 +27,27 @@ The Splendir GUI in the current alpha releases is "feature complete" for the pub
 
 The Splendir GUI and Splendir CLI are standalone executables. No installation is required. From the Releases section in the main GitHub repo you can download one of the following files:
 
+- Ubuntu/Debian pakage: ```splendir-x64.deb```
 - Linux executables: ```splendir-linux-x64.tar.gz```
 - Windows executables: ```splendir-windows-x64.tar.gz```
 - Mac executables: ```splendir-macos.tar.gz```
 
-**Linux**
+**Ubuntu/Debian**
 
-In a terminal, navigate to your download directory and extract the .tar.gz file:
+Download ```splendir-x64.deb``` and in a terminal run:
+
+```
+cd /your/download/directory
+sudo dpkg -i splendir-x64.deb```
+```
+
+**Any Linux**
+
+In a terminal, navigate to your download directory, extract the .tar.gz file, and copy the executables to ```/usr/local/bin```:
 
 ```
 cd /your/download/directory
 tar zxvf splendir-linux-x64.tar.gz
-```
-
-Copy the executables to ```/usr/local/bin```:
-
-```
 sudo cp splendir_gui /usr/local/bin
 sudo cp splendir /usr/local/bin
 ```
