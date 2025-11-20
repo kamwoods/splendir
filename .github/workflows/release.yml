@@ -12,6 +12,9 @@ jobs:
       contents: write
     
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download all build artifacts
         uses: dawidd6/action-download-artifact@v3
         with:
@@ -29,9 +32,6 @@ jobs:
           mkdir -p debbuild/usr/share/applications
           mkdir -p debbuild/usr/share/pixmaps
           mkdir checksums
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       # -------------------------------------------------------
       # Linux Packaging (x64)
