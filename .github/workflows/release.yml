@@ -26,7 +26,12 @@ jobs:
           mkdir -p packages/windows
           mkdir -p debbuild/DEBIAN
           mkdir -p debbuild/usr/bin
+          mkdir -p debbuild/usr/share/applications
+          mkdir -p debbuild/usr/share/pixmaps
           mkdir checksums
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       # -------------------------------------------------------
       # Linux Packaging (x64)
@@ -52,6 +57,21 @@ jobs:
           cp packages/linux/splendir_gui "$INSTALL_DIR/splendir_gui"
 
           chmod 755 "$INSTALL_DIR/splendir" "$INSTALL_DIR/splendir_gui"
+
+          # Copy icon
+          cp assets/splendir-logo-128.png debbuild/usr/share/pixmaps/splendir.png
+
+          # Create desktop entry
+          cat > debbuild/usr/share/applications/splendir.desktop <<EOF
+          [Desktop Entry]
+          Name=Splendir
+          Comment=Directory scanner with GUI
+          Exec=/usr/bin/splendir_gui
+          Icon=splendir
+          Terminal=false
+          Type=Application
+          Categories=Utility;FileTools;
+          EOF
 
           # Create control file
           cat > debbuild/DEBIAN/control <<EOF

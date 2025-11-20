@@ -27,22 +27,27 @@ The Splendir GUI in the current alpha releases is "feature complete" for the pub
 
 The Splendir GUI and Splendir CLI are standalone executables. No installation is required. From the Releases section in the main GitHub repo you can download one of the following files:
 
+- Ubuntu/Debian pakage: ```splendir-x64.deb```
 - Linux executables: ```splendir-linux-x64.tar.gz```
 - Windows executables: ```splendir-windows-x64.tar.gz```
 - Mac executables: ```splendir-macos.tar.gz```
 
-**Linux**
+**Ubuntu/Debian**
 
-In a terminal, navigate to your download directory and extract the .tar.gz file:
+Download ```splendir-x64.deb``` and in a terminal run:
+
+```
+cd /your/download/directory
+sudo dpkg -i splendir-x64.deb
+```
+
+**Any Linux**
+
+In a terminal, navigate to your download directory, extract the .tar.gz file, and copy the executables to ```/usr/local/bin```:
 
 ```
 cd /your/download/directory
 tar zxvf splendir-linux-x64.tar.gz
-```
-
-Copy the executables to ```/usr/local/bin```:
-
-```
 sudo cp splendir_gui /usr/local/bin
 sudo cp splendir /usr/local/bin
 ```
@@ -51,7 +56,7 @@ You can now run the GUI (or the CLI) by typing ```splendir_gui``` or ```splendir
 
 **Windows 11**
 
-Double-click to extract the ```splendir-windows-x64.tar.gz```. Double-click on ```splendir_gui.exe``` to run the GUI, or run ```splendir.exe``` from PowerShell to use the command-line utility. Depending on your Windows installation, you may get a warning that the ```Visual Studio C++ Redistributable``` package needs to be installed first. Windows will also generate a warning pop-up window about an unknown developer when running the GUI. Click ```More info``` and select ```Run Anyway``` to run the GUI.
+Double-click to extract the ```splendir-windows-x64.tar.gz```. Double-click on ```splendir_gui.exe``` to run the GUI, or run ```splendir.exe``` from PowerShell to use the command-line utility. Depending on your Windows installation, you may get a warning that the ```Visual Studio C++ Redistributable``` package needs to be installed first. Windows will generate a warning pop-up window about an unknown developer when running the GUI. Click ```More info``` and select ```Run Anyway``` to run the GUI.
 
 **macOS**
 
@@ -63,7 +68,7 @@ Click the **Browse...** button to select a local directory. Click the **Start Sc
 
 ![Splendir Directory Listing View](assets/sds-dirview.png)
 
-Both the **Directory Listing** view and **Tree View** are implemented with a virtual scrolling feature to provide live views of directories of any size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to any point in the output to inspect and review before exporting. You can also adjust the Sort Options to instantly view and export sorted results without having to rescan. The **Default** sort optioncorresponds to an alphabetized directory walk (all subdirectory entries grouped together at each level).
+Both the **Directory Listing** view and **Tree View** are implemented with a virtual scrolling feature to provide live views of directories of any size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to any point in the output to inspect and review before exporting. You can also adjust the Sort Options to instantly view and export sorted results without having to rescan. The **Default** sort option is an alphabetized directory walk (all subdirectory entries grouped together at each level).
 
 ![Splendir Tree Listing View](assets/sds-treeview.png)
 
