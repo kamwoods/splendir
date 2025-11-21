@@ -5,7 +5,7 @@ use std::time::SystemTime;
 use sha2::{Sha256, Digest};
 use walkdir::WalkDir;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
 use rayon::prelude::*;
 
 use crate::{FileInfo, TreeNode, ScanError};
@@ -14,7 +14,7 @@ use crate::{FileInfo, TreeNode, ScanError};
 pub type ProgressCallback = Arc<dyn Fn(f32, String) + Send + Sync>;
 
 /// Core directory scanner with configurable options
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DirectoryScanner {
     pub include_hidden: bool,
     pub max_depth: Option<usize>,
@@ -22,6 +22,21 @@ pub struct DirectoryScanner {
     pub calculate_sha256: bool,
     pub calculate_md5: bool,
     pub calculate_format: bool,
+    pub cancellation_flag: Option<Arc<AtomicBool>>,
+}
+
+impl std::fmt::Debug for DirectoryScanner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DirectoryScanner")
+            .field("include_hidden", &self.include_hidden)
+            .field("max_depth", &self.max_depth)
+            .field("follow_symlinks", &self.follow_symlinks)
+            .field("calculate_sha256", &self.calculate_sha256)
+            .field("calculate_md5", &self.calculate_md5)
+            .field("calculate_format", &self.calculate_format)
+            .field("cancellation_flag", &"<Arc<AtomicBool>>")
+            .finish()
+    }
 }
 
 impl Default for DirectoryScanner {
@@ -33,6 +48,7 @@ impl Default for DirectoryScanner {
             calculate_sha256: true,
             calculate_md5: false,
             calculate_format: false,
+            cancellation_flag: None,
         }
     }
 }
@@ -72,6 +88,11 @@ impl DirectoryScanner {
         self
     }
     
+    pub fn cancellation_flag(mut self, flag: Arc<AtomicBool>) -> Self {
+        self.cancellation_flag = Some(flag);
+        self
+    }
+    
     /// Scan directory and return detailed file information
     pub fn scan_detailed(&self, path: &Path) -> Result<Vec<FileInfo>, ScanError> {
         self.scan_detailed_with_progress(path, None)
@@ -95,9 +116,24 @@ impl DirectoryScanner {
         let files: Vec<_> = walker
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.file_type().is_file())
+            .filter(|e| {
+                // Check cancellation before processing each entry
+                if let Some(ref flag) = self.cancellation_flag {
+                    if flag.load(Ordering::Relaxed) {
+                        return false;
+                    }
+                }
+                e.file_type().is_file()
+            })
             .filter(|e| self.should_include_entry(e.path()))
             .collect();
+        
+        // Check cancellation after collection
+        if let Some(ref flag) = self.cancellation_flag {
+            if flag.load(Ordering::Relaxed) {
+                return Err(ScanError::Cancelled);
+            }
+        }
         
         let total_files = files.len();
         
@@ -132,10 +168,18 @@ impl DirectoryScanner {
         let calculate_sha256 = self.calculate_sha256;
         let calculate_md5 = self.calculate_md5;
         let calculate_format = self.calculate_format;
+        let cancellation_flag = self.cancellation_flag.clone();
         
         let file_infos: Vec<FileInfo> = file_paths
             .par_iter()
             .filter_map(|path| {
+                // Check cancellation before processing each file
+                if let Some(ref flag) = cancellation_flag {
+                    if flag.load(Ordering::Relaxed) {
+                        return None;
+                    }
+                }
+                
                 // Process the file
                 let result = process_file_with_hash_options(path, calculate_sha256, calculate_md5, calculate_format);
                 
@@ -160,6 +204,13 @@ impl DirectoryScanner {
                 }
             })
             .collect();
+        
+        // Check cancellation after processing
+        if let Some(ref flag) = self.cancellation_flag {
+            if flag.load(Ordering::Relaxed) {
+                return Err(ScanError::Cancelled);
+            }
+        }
         
         if let Some(ref callback) = progress_callback {
             callback(1.0, format!("Scan completed: {} files processed", total_files));
@@ -218,6 +269,13 @@ impl DirectoryScanner {
         let total = entries.len();
         
         for (i, entry) in entries.iter().enumerate() {
+            // Check cancellation
+            if let Some(ref flag) = self.cancellation_flag {
+                if flag.load(Ordering::Relaxed) {
+                    return Err(ScanError::Cancelled);
+                }
+            }
+            
             if let Some(ref callback) = progress_callback {
                 let progress = (i + 1) as f32 / total as f32;
                 callback(progress, format!("Analyzing: {}", entry.path().display()));
@@ -252,9 +310,12 @@ impl DirectoryScanner {
     /// Check if a file/directory should be included based on scanner settings
     fn should_include_entry(&self, path: &Path) -> bool {
         if !self.include_hidden {
-            if let Some(name) = path.file_name() {
-                if name.to_string_lossy().starts_with('.') {
-                    return false;
+            // Check all components in the path for hidden directories
+            for component in path.components() {
+                if let std::path::Component::Normal(name) = component {
+                    if name.to_string_lossy().starts_with('.') {
+                        return false;
+                    }
                 }
             }
         }
@@ -268,6 +329,13 @@ impl DirectoryScanner {
         current_depth: usize,
         progress_callback: &Option<ProgressCallback>
     ) -> Result<TreeNode, ScanError> {
+        // Check cancellation at the start of each node
+        if let Some(ref flag) = self.cancellation_flag {
+            if flag.load(Ordering::Relaxed) {
+                return Err(ScanError::Cancelled);
+            }
+        }
+        
         let name = path.file_name()
             .unwrap_or(path.as_os_str())
             .to_string_lossy()
@@ -284,6 +352,13 @@ impl DirectoryScanner {
             let mut child_paths = Vec::new();
             
             for entry in entries {
+                // Check cancellation in directory read loop
+                if let Some(ref flag) = self.cancellation_flag {
+                    if flag.load(Ordering::Relaxed) {
+                        return Err(ScanError::Cancelled);
+                    }
+                }
+                
                 let entry = entry?;
                 let child_path = entry.path();
                 
@@ -300,8 +375,16 @@ impl DirectoryScanner {
             });
             
             for child_path in child_paths {
+                // Check cancellation before processing each child
+                if let Some(ref flag) = self.cancellation_flag {
+                    if flag.load(Ordering::Relaxed) {
+                        return Err(ScanError::Cancelled);
+                    }
+                }
+                
                 match self.build_tree_node(&child_path, current_depth + 1, progress_callback) {
                     Ok(child_node) => children.push(child_node),
+                    Err(ScanError::Cancelled) => return Err(ScanError::Cancelled),
                     Err(e) => eprintln!("Error building tree for '{}': {}", child_path.display(), e),
                 }
             }
