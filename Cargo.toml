@@ -1,6 +1,6 @@
 [package]
 name = "splendir"
-version = "0.1.0-alpha.9"
+version = "0.1.0-alpha.10"
 edition = "2021"
 authors = ["Kam Woods"]
 description = "A directory scanner with GUI and CLI interfaces"
@@ -33,6 +33,10 @@ tokio = { version = "1.39", features = ["full"], optional = true }
 
 # Optional: for better error handling
 anyhow = "1.0"
+
+[build-dependencies]
+# For embedding Windows icon
+winres = "0.1"
 
 [dev-dependencies]
 # For testing
