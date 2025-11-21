@@ -40,6 +40,7 @@ pub enum ScanError {
     PathNotFound,
     NotADirectory,
     PermissionDenied,
+    Cancelled,
 }
 
 impl From<io::Error> for ScanError {
@@ -59,6 +60,7 @@ impl std::fmt::Display for ScanError {
             ScanError::PathNotFound => write!(f, "Path not found"),
             ScanError::NotADirectory => write!(f, "Path is not a directory"),
             ScanError::PermissionDenied => write!(f, "Permission denied"),
+            ScanError::Cancelled => write!(f, "Operation cancelled"),
         }
     }
 }

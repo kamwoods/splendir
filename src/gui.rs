@@ -7,6 +7,7 @@ use rfd::FileDialog;
 use std::path::PathBuf;
 use std::time::{Instant, Duration};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use directory_scanner::{
     analyze_directory_with_progress, format_tree_output, scan_directory_tree_with_progress,
@@ -193,6 +194,9 @@ struct SplendirGui {
     // Progress tracking
     progress_state: Option<ProgressState>,
     
+    // Cancellation flag
+    cancellation_flag: Option<Arc<AtomicBool>>,
+    
     // Virtual scrolling state
     tree_scroll_offset: f32,
     tree_flattened_cache: Vec<FlatTreeNode>,
@@ -249,6 +253,7 @@ impl Default for SplendirGui {
             error_message: None,
             system_message: None,
             progress_state: None,
+            cancellation_flag: None,
             tree_scroll_offset: 0.0,
             tree_flattened_cache: Vec::new(),
             detail_scroll_offset: 0.0,
@@ -298,6 +303,7 @@ enum Message {
     
     // Scan Events
     StartScan,
+    CancelScan,
     UpdateProgress,
     ScanComplete(ScanResults),
     ScanError(String),
@@ -540,7 +546,11 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             let progress_state = Arc::new(Mutex::new(None));
             state.progress_state = Some(progress_state.clone());
             
-            let scanner = create_scanner(state);
+            // Create cancellation flag
+            let cancellation_flag = Arc::new(AtomicBool::new(false));
+            state.cancellation_flag = Some(cancellation_flag.clone());
+            
+            let scanner = create_scanner(state).cancellation_flag(cancellation_flag);
             let colorize = state.colorize_output;
             
             // Note: we no longer pass scan_mode since we scan all modes
@@ -551,6 +561,12 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     Err(err) => Message::ScanError(err),
                 },
             );
+        }
+        Message::CancelScan => {
+            if let Some(ref flag) = state.cancellation_flag {
+                flag.store(true, Ordering::Relaxed);
+                state.scan_status = "Cancelling scan...".to_string();
+            }
         }
         Message::UpdateProgress => {
             if let Some(ref progress_state) = state.progress_state {
@@ -564,6 +580,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::ScanComplete(mut results) => {
             state.is_scanning = false;
+            state.cancellation_flag = None;
             
             // Save original order before any sorting
             results.original_order = results.detailed_files.clone();
@@ -585,6 +602,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::ScanError(error) => {
             state.is_scanning = false;
+            state.cancellation_flag = None;
             state.error_message = Some(error);
             state.scan_status = "Scan failed".to_string();
             state.progress_state = None;
@@ -655,6 +673,10 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             state.show_about = false;
         }
         Message::Exit => {
+            // Cancel any running scan before exiting
+            if let Some(ref flag) = state.cancellation_flag {
+                flag.store(true, Ordering::Relaxed);
+            }
             return window::get_latest().and_then(window::close);
         }
     }
@@ -662,7 +684,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
     Task::none()
 }
 
-fn view(state: &SplendirGui) -> Element<Message> {
+fn view(state: &SplendirGui) -> Element<'_, Message> {
     let header = view_header(state);
     let options = view_options(state);
     let results = view_results(state);
@@ -769,7 +791,7 @@ fn create_scanner(state: &SplendirGui) -> DirectoryScanner {
     scanner
 }
 
-fn view_header(state: &SplendirGui) -> Element<Message> {
+fn view_header(state: &SplendirGui) -> Element<'_, Message> {
     let path_input = text_input("Select a directory to scan...", &state.selected_path)
         .on_input(Message::PathChanged)
         .padding(10)
@@ -783,17 +805,22 @@ fn view_header(state: &SplendirGui) -> Element<Message> {
         .on_press_maybe(if !state.is_scanning { Some(Message::StartScan) } else { None })
         .padding([10, 20]);
     
+    let cancel_button = button("Cancel")
+        .on_press_maybe(if state.is_scanning { Some(Message::CancelScan) } else { None })
+        .padding([10, 20]);
+    
     row![
         path_input,
         browse_button,
         scan_button,
+        cancel_button,
     ]
     .spacing(10)
     .align_y(Alignment::Center)
     .into()
 }
 
-fn view_options(state: &SplendirGui) -> Element<Message> {
+fn view_options(state: &SplendirGui) -> Element<'_, Message> {
     // Settings section
     let settings_section = column![
         text("Settings").size(16).font(Font { weight: iced::font::Weight::Bold, ..Font::default() }).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
@@ -897,7 +924,7 @@ fn view_options(state: &SplendirGui) -> Element<Message> {
     .into()
 }
 
-fn view_progress(state: &SplendirGui) -> Element<Message> {
+fn view_progress(state: &SplendirGui) -> Element<'_, Message> {
     column![
         text(&state.scan_status).size(18),
         progress_bar(0.0..=1.0, state.scan_progress),
@@ -906,7 +933,7 @@ fn view_progress(state: &SplendirGui) -> Element<Message> {
     .into()
 }
 
-fn view_results(state: &SplendirGui) -> Element<Message> {
+fn view_results(state: &SplendirGui) -> Element<'_, Message> {
     if state.scan_results.detailed_files.is_empty() 
         && state.scan_results.tree_node.is_none()
         && state.scan_results.analysis_output.is_empty() {
@@ -944,7 +971,7 @@ fn view_results(state: &SplendirGui) -> Element<Message> {
 }
 
 // Virtual scrolling for detailed results
-fn view_detailed_results_virtual(state: &SplendirGui) -> Element<Message> {
+fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     if state.scan_results.detailed_files.is_empty() {
         return text("No files found").into();
     }
@@ -1075,7 +1102,7 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<Message> {
 }
 
 // Virtual scrolling for tree view
-fn view_tree_results_virtual(state: &SplendirGui) -> Element<Message> {
+fn view_tree_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     if state.tree_flattened_cache.is_empty() {
         if state.scan_results.tree_node.is_none() {
             return text("No tree data available").into();
@@ -1150,7 +1177,7 @@ fn view_tree_results_virtual(state: &SplendirGui) -> Element<Message> {
     .into()
 }
 
-fn view_analysis_results(state: &SplendirGui) -> Element<Message> {
+fn view_analysis_results(state: &SplendirGui) -> Element<'_, Message> {
     if state.scan_results.analysis_output.is_empty() {
         return text("No analysis data available").into();
     }
@@ -1318,7 +1345,7 @@ async fn perform_scan_with_progress(
                 }
             });
             
-            match scan_directory_tree_with_progress(&path, progress_callback) {
+            match scanner.scan_tree_with_progress(&path, Some(progress_callback)) {
                 Ok(tree) => {
                     results.tree_output = format_tree_output(&tree, colorize);
                     results.tree_node = Some(tree);
