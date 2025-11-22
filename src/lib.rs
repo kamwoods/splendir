@@ -22,6 +22,7 @@ pub struct FileInfo {
     pub last_accessed: String,
     pub md5: String,
     pub sha256: String,
+    pub sha512: String,
     pub format: String,
 }
 
@@ -295,6 +296,7 @@ impl ScannerPresets {
         DirectoryScanner::new()
             .calculate_md5(false)
             .calculate_sha256(false)
+            .calculate_sha512(false)
             // .max_depth(3)
     }
     
@@ -305,6 +307,7 @@ impl ScannerPresets {
             .follow_symlinks(true)
             .calculate_md5(true)
             .calculate_sha256(true)
+            .calculate_sha512(true)
     }
    
     /// Default scan with MD5 enabled
@@ -314,6 +317,7 @@ impl ScannerPresets {
             .follow_symlinks(false)
             .calculate_md5(true)
             .calculate_sha256(false)
+            .calculate_sha512(false)
     }
 
     /// Default scan with SHA256 enabled
@@ -323,5 +327,16 @@ impl ScannerPresets {
             .follow_symlinks(false)
             .calculate_md5(false)
             .calculate_sha256(true)
+            .calculate_sha512(false)
+    }
+    
+    /// Default scan with SHA512 enabled
+    pub fn defaultsha512() -> DirectoryScanner {
+        DirectoryScanner::new()
+            .include_hidden(false)
+            .follow_symlinks(false)
+            .calculate_md5(false)
+            .calculate_sha256(false)
+            .calculate_sha512(true)
     }
 }

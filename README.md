@@ -2,39 +2,32 @@
 
 [![GitHub issues](https://img.shields.io/github/issues/kamwoods/splendir.svg)](https://github.com/kamwoods/splendir/issues)
 [![Build](https://github.com/kamwoods/splendir/actions/workflows/rust.yml/badge.svg)](https://github.com/kamwoods/splendir/actions/workflows/rust.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub forks](https://img.shields.io/github/forks/kamwoods/splendir.svg)](https://github.com/kamwoods/splendir/network)
 
 ### A High Performance Directory Scanner and Printer
 
-Splendir is an extremely fast directory scanner with GUI and CLI interfaces. Splendir generates tree views of files in a directory, customizable lists of file metadata, and high-level reports of directory contents and file type distributions. Releases include executables for Linux (x64) distros, Windows 11 (x64), and macOS (Apple M-series silicon).
+Splendir is an extremely fast directory scanner with a GUI interface. Splendir generates tree views of files in a directory, customizable lists of file metadata, and high-level reports of directory contents and file type distributions. Releases include executables for Linux (x64) distros, Windows 11 (x64), and macOS (Apple M-series silicon).
 
 Features:
-- Multiple scan presets
+- Multi-threaded processing for high speed scans and hash calculations
 - Virtual scrolling in tree and file list modes for live views of millions of files
+- Multiple scan presets
 - Live sorting of output in file list view
-- Multi-threaded processing for high speed scans
-- SHA256 and MD5 hash calculations on request
-- Hidden file and symlink traversal on request
-- File format identification on request
-- Export tree structures as UTF-8 encoded text files
-- Export directory listings as UTF-8 encoded CSV files
+- File format identification
+- Directory listings exported as UTF-8 encoded CSV files, tree structures as UTF-8 encoded text files
 
-Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). Multi-threading for hash calculations is handled by [rayon](https://github.com/rayon-rs/rayon).
+Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). Multi-threading for hash calculations is implemented using [rayon](https://github.com/rayon-rs/rayon).
 
-The Splendir GUI in the current alpha releases is "feature complete" for the publicly described features. The Splendir CLI is a work-in-progress and may lag behind. The main branch of this repo may include untested development code that is subject to change.
+The Splendir GUI in the current alpha releases is "feature complete" for the available features. The Splendir CLI is a work-in-progress and may lag behind. The main branch of this repo may include development code that leads the current release.
 
 ### Install
 
-The Splendir GUI and Splendir CLI are standalone executables. No installation is required. From the Releases section in the main GitHub repo you can download one of the following files:
-
-- Ubuntu/Debian pakage: ```splendir-x64.deb```
-- Linux executables: ```splendir-linux-x64.tar.gz```
-- Windows executables: ```splendir-windows-x64.tar.gz```
-- Mac executables: ```splendir-macos.tar.gz```
+Releases include a Ubuntu/Debian package and standalone executables for Linux, Windows 11 (x64) and macOS (Apple silicon). Follow the instructions in one of the sections below.
 
 **Ubuntu/Debian**
 
-Download ```splendir-x64.deb``` and in a terminal run:
+Download ```splendir-x64.deb``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and in a terminal run:
 
 ```
 cd /your/download/directory
@@ -43,7 +36,7 @@ sudo dpkg -i splendir-x64.deb
 
 **Any Linux**
 
-In a terminal, navigate to your download directory, extract the .tar.gz file, and copy the executables to ```/usr/local/bin```:
+Download ```splendir-linux-x64.tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and extract the .tar.gz file. Then copy the executables to ```/usr/local/bin```:
 
 ```
 cd /your/download/directory
@@ -52,19 +45,19 @@ sudo cp splendir_gui /usr/local/bin
 sudo cp splendir /usr/local/bin
 ```
 
-You can now run the GUI (or the CLI) by typing ```splendir_gui``` or ```splendir``` in the terminal and hitting enter.
+Run the GUI (or the CLI) by typing ```splendir_gui``` or ```splendir``` in the terminal and hitting enter.
 
 **Windows 11**
 
-Double-click to extract the ```splendir-windows-x64.tar.gz```. Double-click on ```splendir_gui.exe``` to run the GUI, or run ```splendir.exe``` from PowerShell to use the command-line utility. Depending on your Windows installation, you may get a warning that the ```Visual Studio C++ Redistributable``` package needs to be installed first. Windows will generate a warning pop-up window about an unknown developer when running the GUI. Click ```More info``` and select ```Run Anyway``` to run the GUI.
+Download ```splendir-windows-x64.tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and extract the files. Double-click on ```splendir_gui.exe``` to run the GUI, or run ```splendir.exe``` in PowerShell to use the CLI. A warning may appear that the ```Visual Studio C++ Redistributable``` package needs to be installed first (this can be [downloaded from Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)). A warning dialog about an unknown developer may appear when running the GUI. Click ```More info``` and select ```Run Anyway```.
 
 **macOS**
 
-Extract the ```splendir-macos.tar.gz``` file in your location of choice. Double-clicking on ```splendir_gui``` will generate an untrusted application warning. Click on ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
+Download ```splendir-macos-tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and extract the files. Double-clicking on ```splendir_gui``` will generate an untrusted application warning. Navigate to ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
 
 ### Usage (GUI)
 
-Click the **Browse...** button to select a local directory. Click the **Start Scan** button to begin a scan once you have selected a directory. The **Mode:** dropdown can be set to **Detailed File List** (outputs a file list with metadata), **Tree View** (outputs a graphical tree view similar to the command-line tool "tree"), or **Directory Analysis** (a high-level overview of the directory contents). All three views are generated when **Start Scan** is clicked. When a scan is complete, an **Export** button will appear to allow export of the content. If **Detailed File List** is currently selected, clicking **Export** will generate a CSV file. If **Tree View** is selected, it will generate a UTF-8 text representation of the tree.
+Click the **Browse...** button to select a local directory, then click the **Start Scan** button. The **Mode:** dropdown can be set to **Detailed File List** (outputs a file list with metadata), **Tree View** (outputs a graphical tree view similar to the command-line tool "tree"), or **Directory Analysis** (a high-level overview of the directory contents). All three views are generated when **Start Scan** is clicked. When a scan is complete, an **Export** button will appear to allow export of the content. If **Detailed File List** is currently selected, clicking **Export** will generate a CSV file. If **Tree View** is selected, it will generate a UTF-8 text representation of the tree.
 
 Splendir will distribute work among all available CPU cores to provide maximum performance when running long scans (for example, computing SHA256 hashes for many files). You can terminate a long-running scan by clicking **Cancel** at any time. The scan will be shut down once the most recent batch of 10 files has completed. Clicking **Exit** during a scan will also trigger a cancellation.
 
@@ -80,7 +73,7 @@ The **Detailed File List** view is exported as a UTF-8 encoded CSV file (this ca
 
 ### Usage (CLI)
 
-To generate a directory listing with file name, path, size, last modified date, and SHA256, invoke the CLI tool as follows:
+Splendir includes a CLI that currently implements a limited subset of the functionality from the GUI. To generate a directory listing with file name, path, size, last modified date, and SHA256, invoke the CLI tool as follows:
 
 ```./splendir /path/to/dir```
 
@@ -131,7 +124,7 @@ Additional features are in progress.
 
 ### Build (Developers and Contributors)
 
-To build, ensure you are using [Rust 1.88.0 or newer](https://www.rust-lang.org/tools/install).
+To build, ensure you are using [Rust 1.91.0 or newer](https://www.rust-lang.org/tools/install).
 
 Clone this repo with the command:
 
