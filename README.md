@@ -10,16 +10,16 @@
 Splendir is an extremely fast directory scanner with a GUI interface. Splendir generates tree views of files in a directory, customizable lists of file metadata, and high-level reports of directory contents and file type distributions. Releases include executables for Linux (x64) distros, Windows 11 (x64), and macOS (Apple M-series silicon).
 
 Features:
-- Multiple scan presets
-- Virtual scrolling in tree and file list modes for live views of millions of files
-- Live sorting of output in file list view
 - Multi-threaded processing for high speed scans and hash calculations
+- Virtual scrolling in tree and file list modes for live views of millions of files
+- Multiple scan presets
+- Live sorting of output in file list view
 - File format identification
-- Exports direcotory listings as UTF-8 encoded CSV files and tree structures as UTF-8 encoded text files
+- Directory listings exported as UTF-8 encoded CSV files, tree structures as UTF-8 encoded text files
 
 Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). Multi-threading for hash calculations is implemented using [rayon](https://github.com/rayon-rs/rayon).
 
-The Splendir GUI in the current alpha releases is "feature complete" for the available features. The Splendir CLI is a work-in-progress and may lag behind. The main branch of this repo may include untested development code that is subject to change.
+The Splendir GUI in the current alpha releases is "feature complete" for the available features. The Splendir CLI is a work-in-progress and may lag behind. The main branch of this repo may include development code that leads the current release.
 
 ### Install
 
@@ -49,13 +49,11 @@ Run the GUI (or the CLI) by typing ```splendir_gui``` or ```splendir``` in the t
 
 **Windows 11**
 
-Download ```splendir-windows-x64.tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and extract the **.tar.gz** file by double clicking it in the download location.
-
-Double-click on ```splendir_gui.exe``` to run the GUI, or run ```splendir.exe``` in PowerShell to use the CLI. A warning may appear that the ```Visual Studio C++ Redistributable``` package needs to be installed first (this can be [downloaded from Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)). A warning dialog about an unknown developer may appear when running the GUI. Click ```More info``` and select ```Run Anyway```.
+Download ```splendir-windows-x64.tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and extract the files. Double-click on ```splendir_gui.exe``` to run the GUI, or run ```splendir.exe``` in PowerShell to use the CLI. A warning may appear that the ```Visual Studio C++ Redistributable``` package needs to be installed first (this can be [downloaded from Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)). A warning dialog about an unknown developer may appear when running the GUI. Click ```More info``` and select ```Run Anyway```.
 
 **macOS**
 
-Download ```splendir-macos-tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases). Extract the download in a location of choice. Double-clicking on ```splendir_gui``` will generate an untrusted application warning. Navigate to ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
+Download ```splendir-macos-tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and extract the files. Double-clicking on ```splendir_gui``` will generate an untrusted application warning. Navigate to ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
 
 ### Usage (GUI)
 
