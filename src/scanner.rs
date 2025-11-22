@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::io::{self, Read};
 use std::time::SystemTime;
-use sha2::{Sha256, Digest};
+use sha2::{Sha256, Sha512, Digest};
 use walkdir::WalkDir;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
@@ -20,6 +20,7 @@ pub struct DirectoryScanner {
     pub max_depth: Option<usize>,
     pub follow_symlinks: bool,
     pub calculate_sha256: bool,
+    pub calculate_sha512: bool,
     pub calculate_md5: bool,
     pub calculate_format: bool,
     pub cancellation_flag: Option<Arc<AtomicBool>>,
@@ -32,6 +33,7 @@ impl std::fmt::Debug for DirectoryScanner {
             .field("max_depth", &self.max_depth)
             .field("follow_symlinks", &self.follow_symlinks)
             .field("calculate_sha256", &self.calculate_sha256)
+            .field("calculate_sha512", &self.calculate_sha512)
             .field("calculate_md5", &self.calculate_md5)
             .field("calculate_format", &self.calculate_format)
             .field("cancellation_flag", &"<Arc<AtomicBool>>")
@@ -46,6 +48,7 @@ impl Default for DirectoryScanner {
             max_depth: None,
             follow_symlinks: false,
             calculate_sha256: true,
+            calculate_sha512: false,
             calculate_md5: false,
             calculate_format: false,
             cancellation_flag: None,
@@ -75,6 +78,11 @@ impl DirectoryScanner {
     
     pub fn calculate_sha256(mut self, calculate: bool) -> Self {
         self.calculate_sha256 = calculate;
+        self
+    }
+    
+    pub fn calculate_sha512(mut self, calculate: bool) -> Self {
+        self.calculate_sha512 = calculate;
         self
     }
     
@@ -166,6 +174,7 @@ impl DirectoryScanner {
         
         // Process files in parallel
         let calculate_sha256 = self.calculate_sha256;
+        let calculate_sha512 = self.calculate_sha512;
         let calculate_md5 = self.calculate_md5;
         let calculate_format = self.calculate_format;
         let cancellation_flag = self.cancellation_flag.clone();
@@ -181,7 +190,7 @@ impl DirectoryScanner {
                 }
                 
                 // Process the file
-                let result = process_file_with_hash_options(path, calculate_sha256, calculate_md5, calculate_format);
+                let result = process_file_with_hash_options(path, calculate_sha256, calculate_sha512, calculate_md5, calculate_format);
                 
                 // Update progress (with throttling to avoid callback spam)
                 if let Some(ref callback) = progress_callback {
@@ -304,7 +313,7 @@ impl DirectoryScanner {
     
     /// Process a file with scanner options
     fn process_file_with_options(&self, path: &Path) -> io::Result<FileInfo> {
-        process_file_with_hash_options(path, self.calculate_sha256, self.calculate_md5, self.calculate_format)
+        process_file_with_hash_options(path, self.calculate_sha256, self.calculate_sha512, self.calculate_md5, self.calculate_format)
     }
     
     /// Check if a file/directory should be included based on scanner settings
@@ -432,16 +441,16 @@ pub fn validate_path(path: &Path) -> Result<(), ScanError> {
 
 /// Process a single file and extract its information (with SHA256)
 pub fn process_file(path: &Path) -> io::Result<FileInfo> {
-    process_file_with_hash_options(path, true, false, false)
+    process_file_with_hash_options(path, true, false, false, false)
 }
 
 /// Process a single file without calculating SHA256 (faster)
 pub fn process_file_no_hash(path: &Path) -> io::Result<FileInfo> {
-    process_file_with_hash_options(path, false, false, false)
+    process_file_with_hash_options(path, false, false, false, false)
 }
 
 /// Process a file with configurable hash options
-pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calculate_md5: bool, calculate_format: bool) -> io::Result<FileInfo> {
+pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calculate_sha512: bool, calculate_md5: bool, calculate_format: bool) -> io::Result<FileInfo> {
     let metadata = fs::metadata(path)?;
     
     let name = path.file_name()
@@ -470,10 +479,10 @@ pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calcu
         .and_then(|time| format_time_optional(time))
         .unwrap_or_else(|| "N/A".to_string());
     
-    let (md5, sha256) = if calculate_sha256 || calculate_md5 {
-        calculate_file_hashes(path, calculate_sha256, calculate_md5)?
+    let (md5, sha256, sha512) = if calculate_sha256 || calculate_sha512 || calculate_md5 {
+        calculate_file_hashes(path, calculate_sha256, calculate_sha512, calculate_md5)?
     } else {
-        (String::from("Not calculated"), String::from("Not calculated"))
+        (String::from("Not calculated"), String::from("Not calculated"), String::from("Not calculated"))
     };
     
     let format = if calculate_format {
@@ -492,6 +501,7 @@ pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calcu
         last_accessed,
         md5,
         sha256,
+        sha512,
         format,
     })
 }
@@ -530,14 +540,15 @@ pub fn calculate_md5(path: &Path) -> io::Result<String> {
     Ok(format!("{:x}", context.compute()))
 }
 
-/// Calculate both MD5 and SHA256 hashes efficiently in a single pass
-pub fn calculate_file_hashes(path: &Path, calc_sha256: bool, calc_md5: bool) -> io::Result<(String, String)> {
-    if !calc_sha256 && !calc_md5 {
-        return Ok((String::from("Not calculated"), String::from("Not calculated")));
+/// Calculate MD5, SHA256, and SHA512 hashes efficiently in a single pass
+pub fn calculate_file_hashes(path: &Path, calc_sha256: bool, calc_sha512: bool, calc_md5: bool) -> io::Result<(String, String, String)> {
+    if !calc_sha256 && !calc_sha512 && !calc_md5 {
+        return Ok((String::from("Not calculated"), String::from("Not calculated"), String::from("Not calculated")));
     }
     
     let mut file = fs::File::open(path)?;
     let mut sha256_hasher = if calc_sha256 { Some(Sha256::new()) } else { None };
+    let mut sha512_hasher = if calc_sha512 { Some(Sha512::new()) } else { None };
     let mut md5_context = if calc_md5 { Some(md5::Context::new()) } else { None };
     let mut buffer = [0; 8192];
     
@@ -548,6 +559,10 @@ pub fn calculate_file_hashes(path: &Path, calc_sha256: bool, calc_md5: bool) -> 
         }
         
         if let Some(ref mut hasher) = sha256_hasher {
+            Digest::update(hasher, &buffer[..bytes_read]);
+        }
+        
+        if let Some(ref mut hasher) = sha512_hasher {
             Digest::update(hasher, &buffer[..bytes_read]);
         }
         
@@ -568,7 +583,13 @@ pub fn calculate_file_hashes(path: &Path, calc_sha256: bool, calc_md5: bool) -> 
         String::from("Not calculated")
     };
     
-    Ok((md5, sha256))
+    let sha512 = if let Some(hasher) = sha512_hasher {
+        format!("{:x}", hasher.finalize())
+    } else {
+        String::from("Not calculated")
+    };
+    
+    Ok((md5, sha256, sha512))
 }
 
 /// Format a SystemTime as a readable string

@@ -1,6 +1,6 @@
 [package]
 name = "splendir"
-version = "0.1.0-alpha.10"
+version = "0.1.0-alpha.11"
 edition = "2021"
 authors = ["Kam Woods"]
 description = "A directory scanner with GUI and CLI interfaces"
@@ -29,7 +29,7 @@ iced = { version = "0.13", features = ["tokio"], optional = true }
 rfd = { version = "0.15", optional = true }
 
 # Async runtime for GUI (optional)
-tokio = { version = "1.39", features = ["full"], optional = true }
+tokio = { version = "1.48", features = ["full"], optional = true }
 
 # Optional: for better error handling
 anyhow = "1.0"

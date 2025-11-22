@@ -148,6 +148,7 @@ struct ColumnVisibility {
     show_format: bool,
     calculate_md5: bool,
     calculate_sha256: bool,
+    calculate_sha512: bool,
 }
 
 struct SplendirGui {
@@ -159,6 +160,7 @@ struct SplendirGui {
     follow_symlinks: bool,
     calculate_md5: bool,
     calculate_sha256: bool,
+    calculate_sha512: bool,
     colorize_output: bool,
     max_depth: String,
     
@@ -228,6 +230,7 @@ impl Default for SplendirGui {
             follow_symlinks: false,
             calculate_md5: false,
             calculate_sha256: false,
+            calculate_sha512: false,
             colorize_output: false,
             max_depth: String::new(),
             
@@ -283,6 +286,7 @@ enum Message {
     IncludeHiddenToggled(bool),
     FollowSymlinksToggled(bool),
     CalculateSHA256Toggled(bool),
+    CalculateSHA512Toggled(bool),
     CalculateMD5Toggled(bool),
     ColorizeOutputToggled(bool),
     MaxDepthChanged(String),
@@ -361,6 +365,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                 ScanPreset::Minimal => {
                     state.calculate_md5 = false;
                     state.calculate_sha256 = false;
+                    state.calculate_sha512 = false;
                     // state.max_depth = "3".to_string();
                     state.max_depth = String::new();
                     state.colorize_output = false;
@@ -379,6 +384,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.follow_symlinks = true;
                     state.calculate_md5 = true;
                     state.calculate_sha256 = true;
+                    state.calculate_sha512 = true;
                     state.max_depth = String::new();
                     state.colorize_output = false;
                     // Complete: all columns
@@ -397,6 +403,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.follow_symlinks = false;
                     state.calculate_md5 = false;
                     state.calculate_sha256 = false;
+                    state.calculate_sha512 = false;
                     state.max_depth = String::new();
                     state.colorize_output = false;
                     // Default: File Name, Path, Size, Modified
@@ -415,6 +422,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.follow_symlinks = false;
                     state.calculate_md5 = true;
                     state.calculate_sha256 = false;
+                    state.calculate_sha512 = false;
                     state.max_depth = String::new();
                     state.colorize_output = false;
                     // Default: File Name, Path, Size, Modified
@@ -433,6 +441,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.follow_symlinks = false;
                     state.calculate_md5 = false;
                     state.calculate_sha256 = true;
+                    state.calculate_sha512 = false;
                     state.max_depth = String::new();
                     state.colorize_output = false;
                     // Default: File Name, Path, Size, Modified
@@ -459,6 +468,9 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::CalculateSHA256Toggled(value) => {
             state.calculate_sha256 = value;
+        }
+        Message::CalculateSHA512Toggled(value) => {
+            state.calculate_sha512 = value;
         }
         Message::ColorizeOutputToggled(value) => {
             state.colorize_output = value;
@@ -628,6 +640,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                 show_format: state.show_format,
                 calculate_md5: state.calculate_md5,
                 calculate_sha256: state.calculate_sha256,
+                calculate_sha512: state.calculate_sha512,
             };
             
             return Task::perform(
@@ -781,6 +794,7 @@ fn create_scanner(state: &SplendirGui) -> DirectoryScanner {
         .include_hidden(state.include_hidden)
         .follow_symlinks(state.follow_symlinks)
         .calculate_sha256(state.calculate_sha256)
+        .calculate_sha512(state.calculate_sha512)
         .calculate_md5(state.calculate_md5)
         .calculate_format(state.calculate_format);
     
@@ -869,6 +883,7 @@ fn view_options(state: &SplendirGui) -> Element<'_, Message> {
         checkbox("Format", state.show_format).on_toggle(Message::ShowFormatToggled),
         checkbox("MD5", state.calculate_md5).on_toggle(Message::CalculateMD5Toggled),
         checkbox("SHA256", state.calculate_sha256).on_toggle(Message::CalculateSHA256Toggled),
+        checkbox("SHA512", state.calculate_sha512).on_toggle(Message::CalculateSHA512Toggled),
     ].spacing(8);
     
     let file_options_section = column![
@@ -1017,6 +1032,9 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     if state.calculate_sha256 {
         header_row = header_row.push(text("SHA256").width(Length::FillPortion(2)));
     }
+    if state.calculate_sha512 {
+        header_row = header_row.push(text("SHA512").width(Length::FillPortion(2)));
+    }
     
     // Calculate visible range
     let scroll_offset = state.detail_scroll_offset.max(0.0).min((total_height - VIEWPORT_HEIGHT).max(0.0));
@@ -1072,6 +1090,13 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                     format!("{}...", &file.sha256[..12]) 
                 } else { 
                     file.sha256.clone() 
+                }).width(Length::FillPortion(2)).size(14));
+            }
+            if state.calculate_sha512 {
+                data_row = data_row.push(text(if file.sha512.len() > 12 { 
+                    format!("{}...", &file.sha512[..12]) 
+                } else { 
+                    file.sha512.clone() 
                 }).width(Length::FillPortion(2)).size(14));
             }
             
@@ -1431,6 +1456,7 @@ async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode, col
                 if columns.show_format { headers.push("Format"); }
                 if columns.calculate_md5 { headers.push("MD5"); }
                 if columns.calculate_sha256 { headers.push("SHA256"); }
+                if columns.calculate_sha512 { headers.push("SHA512"); }
                 
                 writeln!(file, "{}", headers.join(","))
                     .map_err(|e| format!("Failed to write header: {}", e))?;
@@ -1467,6 +1493,9 @@ async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode, col
                     }
                     if columns.calculate_sha256 {
                         values.push(format!("\"{}\"", file_info.sha256));
+                    }
+                    if columns.calculate_sha512 {
+                        values.push(format!("\"{}\"", file_info.sha512));
                     }
                     
                     writeln!(file, "{}", values.join(","))
