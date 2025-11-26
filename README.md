@@ -64,9 +64,11 @@ Both the **Directory Listing** view and **Tree View** are implemented with a vir
 
 ![Splendir Tree Listing View](assets/sds-treeview.png)
 
-The **Detailed File List** view is exported as a UTF-8 encoded CSV file (this can be conveniently viewed in a spreadsheet), and the **Tree View** is exported as a UTF-8 encoded text file. Additional export options are planned for future releases.
+The **Detailed File List** view is exported as a UTF-8 encoded CSV file (this can be conveniently viewed in a spreadsheet), and the **Tree View** is exported as a UTF-8 encoded text file.
 
 ![Splendir Directory Analysis View](assets/sds-analysis.png)
+
+The **Directory Analysis** view provides some basic information about the total size of the directory scanned and the types and counts of files encountered.
 
 ### Build (Developers and Contributors)
 
