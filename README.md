@@ -17,9 +17,7 @@ Features:
 - File format identification
 - Directory listings exported as UTF-8 encoded CSV files, tree structures as UTF-8 encoded text files
 
-Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). Multi-threading for hash calculations is implemented using [rayon](https://github.com/rayon-rs/rayon).
-
-The Splendir GUI in the current alpha releases is "feature complete" for the available features. The Splendir CLI is a work-in-progress and may lag behind. The main branch of this repo may include development code that leads the current release.
+Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). Multi-threading for hash calculations is implemented using [rayon](https://github.com/rayon-rs/rayon). Splendir is currently in alpha, but releases should be consider "feature complete" for the publicly documented features. The main branch of this repo may include development code that leads the current release.
 
 ### Install
 
@@ -41,21 +39,20 @@ Download ```splendir-linux-x64.tar.gz``` from the latest release in [Releases](h
 ```
 cd /your/download/directory
 tar zxvf splendir-linux-x64.tar.gz
-sudo cp splendir_gui /usr/local/bin
 sudo cp splendir /usr/local/bin
 ```
 
-Run the GUI (or the CLI) by typing ```splendir_gui``` or ```splendir``` in the terminal and hitting enter.
+Run the GUI by typing ```splendir``` in the terminal and hitting enter.
 
 **Windows 11**
 
-Download ```splendir-windows-x64.tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and extract the files. Double-click on ```splendir_gui.exe``` to run the GUI, or run ```splendir.exe``` in PowerShell to use the CLI. A warning may appear that the ```Visual Studio C++ Redistributable``` package needs to be installed first (this can be [downloaded from Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)). A warning dialog about an unknown developer may appear when running the GUI. Click ```More info``` and select ```Run Anyway```.
+Download ```splendir-windows-x64.tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and extract the files. Double-click on ```splendir.exe``` to run the GUI. A warning may appear that the ```Visual Studio C++ Redistributable``` package needs to be installed first (this can be [downloaded from Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)). A warning dialog about an unknown developer may appear when running the GUI. Click ```More info``` and select ```Run Anyway```.
 
 **macOS**
 
-Download ```splendir-macos-tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and extract the files. Double-clicking on ```splendir_gui``` will generate an untrusted application warning. Navigate to ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
+Download ```splendir-macos-tar.gz``` from the latest release in [Releases](https://github.com/kamwoods/splendir/releases) and extract the files. Double-clicking on ```splendir``` will generate an untrusted application warning. Navigate to ```Apple Menu > System Settings``` and then select ```Privacy & Security``` in the sidebar. In ```Security```, click ```Open``` and ```Open Anyway```. You will be asked for a login password to confirm.
 
-### Usage (GUI)
+### Using Splendir
 
 Click the **Browse...** button to select a local directory, then click the **Start Scan** button. The **Mode:** dropdown can be set to **Detailed File List** (outputs a file list with metadata), **Tree View** (outputs a graphical tree view similar to the command-line tool "tree"), or **Directory Analysis** (a high-level overview of the directory contents). All three views are generated when **Start Scan** is clicked. When a scan is complete, an **Export** button will appear to allow export of the content. If **Detailed File List** is currently selected, clicking **Export** will generate a CSV file. If **Tree View** is selected, it will generate a UTF-8 text representation of the tree.
 
@@ -71,57 +68,6 @@ The **Detailed File List** view is exported as a UTF-8 encoded CSV file (this ca
 
 ![Splendir Directory Analysis View](assets/sds-analysis.png)
 
-### Usage (CLI)
-
-Splendir includes a CLI that currently implements a limited subset of the functionality from the GUI. To generate a directory listing with file name, path, size, last modified date, and SHA256, invoke the CLI tool as follows:
-
-```./splendir /path/to/dir```
-
-To generate a tree view, invoke it as follows:
-
-```./splendir --tree /path/to/dir```
-
-To generate a tree view with basic colorization, invoke it as follows:
-
-```./splendir -C --tree /path/to/dir```
-
-Full features (subject to change in this early WIP) can be viewed with:
-
-```./splendir --help```
-
-```shell
-Splendir - Recursively scan directories and display file information
-
-USAGE:
-    ./splendir [OPTIONS] <directory_path>
-
-ARGUMENTS:
-    <directory_path>    Path to the directory to scan
-
-OPTIONS:
-    --tree              Display results as a tree structure
-    -C                  Colorize the tree output (only works with --tree)
-    --fast              Fast mode - skip SHA256 calculation and limit depth
-    --analyze           Comprehensive directory analysis with statistics
-    -h, --help          Print this help information
-
-EXAMPLES:
-    ./splendir /home/user                    # Detailed file listing
-    ./splendir --tree /home/user             # Tree view
-    ./splendir --tree -C /home/user          # Colorized tree view
-    ./splendir --fast /home/user             # Fast scan without hashes
-    ./splendir --analyze /home/user          # Comprehensive analysis
-    ./splendir --help                        # Show this help message
-
-MODES:
-    Default    : Shows detailed file information including SHA256 hashes
-    Tree       : Shows directory structure as a visual tree
-    Fast       : Quick scan without SHA256 calculation (faster for large dirs)
-    Analysis   : Comprehensive statistics and file type breakdown
-```
-
-Additional features are in progress.
-
 ### Build (Developers and Contributors)
 
 To build, ensure you are using [Rust 1.91.0 or newer](https://www.rust-lang.org/tools/install).
@@ -130,7 +76,7 @@ Clone this repo with the command:
 
 ```git clone https://github.com/kamwoods/splendir```
 
-Navigate to the root of your cloned directory, and build the CLI and GUI binaries with:
+Navigate to the root of your cloned directory, and build the Splendir binary with:
 
 ```shell
 cargo build --release

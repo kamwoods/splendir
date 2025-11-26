@@ -1,9 +1,9 @@
 [package]
 name = "splendir"
-version = "0.1.0-alpha.11"
+version = "0.1.0-alpha.12"
 edition = "2021"
 authors = ["Kam Woods"]
-description = "A directory scanner with GUI and CLI interfaces"
+description = "A directory scanner with a GUI interface"
 license = "MIT"
 repository = "https://github.com/kamwoods/splendir"
 readme = "README.md"
@@ -18,17 +18,18 @@ md5 = "0.7"
 chrono = { version = "0.4", features = ["serde"] }
 
 # Parallel processing
-rayon = "1.8"
-num_cpus = "1.16"
+rayon = "1.11"
+num_cpus = "1.17"
 
 # File format identification
-file-format = "0.27"
+file-format = { version = "0.28", features = ["reader"] }
+mime_guess = "2.0"
 
-# GUI dependencies (optional)
+# GUI dependencies
 iced = { version = "0.13", features = ["tokio"], optional = true }
 rfd = { version = "0.15", optional = true }
 
-# Async runtime for GUI (optional)
+# Async runtime for GUI
 tokio = { version = "1.48", features = ["full"], optional = true }
 
 # Optional: for better error handling
@@ -44,14 +45,14 @@ tempfile = "3.10"
 assert_cmd = "2.0"
 predicates = "3.1"
 
-# CLI binary
-[[bin]]
-name = "splendir"
-path = "src/main.rs"
+# CLI binary - not updated in dev or included at present
+# [[bin]]
+# name = "splendir-cli"
+# path = "src/main.rs"
 
 # GUI binary
 [[bin]]
-name = "splendir_gui"
+name = "splendir"
 path = "src/gui_main.rs"
 windows_subsystem = "windows"
 

@@ -24,6 +24,7 @@ pub struct FileInfo {
     pub sha256: String,
     pub sha512: String,
     pub format: String,
+    pub mime_type: String,
 }
 
 #[derive(Debug, Clone)]

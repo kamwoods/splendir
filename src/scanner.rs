@@ -23,6 +23,7 @@ pub struct DirectoryScanner {
     pub calculate_sha512: bool,
     pub calculate_md5: bool,
     pub calculate_format: bool,
+    pub calculate_mime: bool,
     pub cancellation_flag: Option<Arc<AtomicBool>>,
 }
 
@@ -36,6 +37,7 @@ impl std::fmt::Debug for DirectoryScanner {
             .field("calculate_sha512", &self.calculate_sha512)
             .field("calculate_md5", &self.calculate_md5)
             .field("calculate_format", &self.calculate_format)
+            .field("calculate_mime", &self.calculate_mime)
             .field("cancellation_flag", &"<Arc<AtomicBool>>")
             .finish()
     }
@@ -51,6 +53,7 @@ impl Default for DirectoryScanner {
             calculate_sha512: false,
             calculate_md5: false,
             calculate_format: false,
+            calculate_mime: false,
             cancellation_flag: None,
         }
     }
@@ -93,6 +96,11 @@ impl DirectoryScanner {
     
     pub fn calculate_format(mut self, calculate: bool) -> Self {
         self.calculate_format = calculate;
+        self
+    }
+    
+    pub fn calculate_mime(mut self, calculate: bool) -> Self {
+        self.calculate_mime = calculate;
         self
     }
     
@@ -177,6 +185,7 @@ impl DirectoryScanner {
         let calculate_sha512 = self.calculate_sha512;
         let calculate_md5 = self.calculate_md5;
         let calculate_format = self.calculate_format;
+        let calculate_mime = self.calculate_mime;
         let cancellation_flag = self.cancellation_flag.clone();
         
         let file_infos: Vec<FileInfo> = file_paths
@@ -190,7 +199,7 @@ impl DirectoryScanner {
                 }
                 
                 // Process the file
-                let result = process_file_with_hash_options(path, calculate_sha256, calculate_sha512, calculate_md5, calculate_format);
+                let result = process_file_with_hash_options(path, calculate_sha256, calculate_sha512, calculate_md5, calculate_format, calculate_mime);
                 
                 // Update progress (with throttling to avoid callback spam)
                 if let Some(ref callback) = progress_callback {
@@ -313,7 +322,7 @@ impl DirectoryScanner {
     
     /// Process a file with scanner options
     fn process_file_with_options(&self, path: &Path) -> io::Result<FileInfo> {
-        process_file_with_hash_options(path, self.calculate_sha256, self.calculate_sha512, self.calculate_md5, self.calculate_format)
+        process_file_with_hash_options(path, self.calculate_sha256, self.calculate_sha512, self.calculate_md5, self.calculate_format, self.calculate_mime)
     }
     
     /// Check if a file/directory should be included based on scanner settings
@@ -441,16 +450,16 @@ pub fn validate_path(path: &Path) -> Result<(), ScanError> {
 
 /// Process a single file and extract its information (with SHA256)
 pub fn process_file(path: &Path) -> io::Result<FileInfo> {
-    process_file_with_hash_options(path, true, false, false, false)
+    process_file_with_hash_options(path, true, false, false, false, false)
 }
 
 /// Process a single file without calculating SHA256 (faster)
 pub fn process_file_no_hash(path: &Path) -> io::Result<FileInfo> {
-    process_file_with_hash_options(path, false, false, false, false)
+    process_file_with_hash_options(path, false, false, false, false, false)
 }
 
 /// Process a file with configurable hash options
-pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calculate_sha512: bool, calculate_md5: bool, calculate_format: bool) -> io::Result<FileInfo> {
+pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calculate_sha512: bool, calculate_md5: bool, calculate_format: bool, calculate_mime: bool) -> io::Result<FileInfo> {
     let metadata = fs::metadata(path)?;
     
     let name = path.file_name()
@@ -491,6 +500,12 @@ pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calcu
         String::from("Not calculated")
     };
     
+    let mime_type = if calculate_mime {
+        identify_mime_type(path).unwrap_or_else(|| "application/octet-stream".to_string())
+    } else {
+        String::from("Not calculated")
+    };
+    
     Ok(FileInfo {
         name,
         full_path,
@@ -503,6 +518,7 @@ pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calcu
         sha256,
         sha512,
         format,
+        mime_type,
     })
 }
 
@@ -655,4 +671,17 @@ pub fn quick_directory_count(path: &Path) -> io::Result<(usize, usize)> {
 fn identify_format(path: &Path) -> Option<String> {
     let format = file_format::FileFormat::from_file(path).ok()?;
     Some(format.name().to_string())
+}
+
+/// Identify MIME type using file-format crate with fallback to mime_guess
+fn identify_mime_type(path: &Path) -> Option<String> {
+    // Try content-based detection first using file-format's built-in media_type
+    if let Ok(format) = file_format::FileFormat::from_file(path) {
+        return Some(format.media_type().to_string());
+    }
+    
+    // Fall back to extension-based detection
+    Some(mime_guess::from_path(path)
+        .first_or_octet_stream()
+        .to_string())
 }
