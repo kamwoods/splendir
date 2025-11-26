@@ -39,8 +39,7 @@ jobs:
       - name: Package Linux binaries (x64)
         run: |
           cp artifacts/splendir-ubuntu-latest/splendir packages/linux/
-          cp artifacts/splendir_gui-ubuntu-latest/splendir_gui packages/linux/
-          chmod +x packages/linux/splendir packages/linux/splendir_gui
+          chmod +x packages/linux/splendir
 
           tar -czvf packages/splendir-linux-x64.tar.gz -C packages/linux .
 
@@ -53,9 +52,9 @@ jobs:
           INSTALL_DIR="debbuild/usr/bin"
 
           # Copy binaries into the package filesystem
-          cp packages/linux/splendir "$INSTALL_DIR/splendir_gui"
+          cp packages/linux/splendir "$INSTALL_DIR/splendir"
 
-          chmod 755 "$INSTALL_DIR/splendir" "$INSTALL_DIR/splendir_gui"
+          chmod 755 "$INSTALL_DIR/splendir"
 
           # Copy icon
           cp assets/splendir-logo-128.png debbuild/usr/share/pixmaps/splendir.png
