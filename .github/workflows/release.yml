@@ -53,8 +53,7 @@ jobs:
           INSTALL_DIR="debbuild/usr/bin"
 
           # Copy binaries into the package filesystem
-          cp packages/linux/splendir "$INSTALL_DIR/splendir"
-          cp packages/linux/splendir_gui "$INSTALL_DIR/splendir_gui"
+          cp packages/linux/splendir "$INSTALL_DIR/splendir_gui"
 
           chmod 755 "$INSTALL_DIR/splendir" "$INSTALL_DIR/splendir_gui"
 
@@ -66,7 +65,7 @@ jobs:
           [Desktop Entry]
           Name=Splendir
           Comment=Directory scanner with GUI
-          Exec=/usr/bin/splendir_gui
+          Exec=/usr/bin/splendir
           Icon=splendir
           Terminal=false
           Type=Application
@@ -82,8 +81,8 @@ jobs:
           Architecture: amd64
           Depends: libc6 (>= 2.17)
           Maintainer: Kam Woods
-          Description: A directory scanner with GUI and CLI interfaces
-           Includes both splendir (CLI) and splendir_gui (GUI).
+          Description: A directory scanner with a GUI interface
+           Includes the splendir executable.
           EOF
 
           # Build the .deb
@@ -95,8 +94,7 @@ jobs:
       - name: Package macOS binaries
         run: |
           cp artifacts/splendir-macos-latest/splendir packages/macos/
-          cp artifacts/splendir_gui-macos-latest/splendir_gui packages/macos/
-          chmod +x packages/macos/splendir packages/macos/splendir_gui
+          chmod +x packages/macos/splendir
 
           tar -czvf packages/splendir-macos.tar.gz -C packages/macos .
 
@@ -106,7 +104,6 @@ jobs:
       - name: Package Windows binaries (x64)
         run: |
           cp artifacts/splendir-windows-latest/splendir.exe packages/windows/
-          cp artifacts/splendir_gui-windows-latest/splendir_gui.exe packages/windows/
 
           tar -czvf packages/splendir-windows-x64.tar.gz -C packages/windows .
 
