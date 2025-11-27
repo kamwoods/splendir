@@ -1023,7 +1023,7 @@ fn view_results(state: &SplendirGui) -> Element<'_, Message> {
     .into()
 }
 
-// Virtual scrolling for detailed results
+// Virtual scrolling for detailed results with sticky header
 fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     if state.scan_results.detailed_files.is_empty() {
         return text("No files found").into();
@@ -1036,9 +1036,6 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     let total_files = state.scan_results.detailed_files.len();
     
     let file_count_text = text(format!("Total files: {}", total_files)).size(14);
-    
-    // Build header dynamically based on selected columns
-    let mut header_row = row![].spacing(10).padding([0, 10]);
     
     // Calculate actual widths based on content when expanded
     let (filename_width, path_width, fullpath_width, standard_width, size_width) = if state.columns_expanded {
@@ -1076,45 +1073,47 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         )
     };
     
+    // Build header row with bold text
+    let mut header_row = row![].spacing(10).padding([0, 10]).height(Length::Fixed(30.0)).align_y(Alignment::Center);
+    
     if state.show_filename {
-        header_row = header_row.push(text("File").width(filename_width));
+        header_row = header_row.push(text("File").width(filename_width).size(15));
     }
     if state.show_path {
-        header_row = header_row.push(text("Path").width(path_width));
+        header_row = header_row.push(text("Path").width(path_width).size(15));
     }
     if state.show_path_name {
-        header_row = header_row.push(text("Path + Name").width(fullpath_width));
+        header_row = header_row.push(text("Path + Name").width(fullpath_width).size(15));
     }
     if state.show_size {
-        header_row = header_row.push(text("Size").width(size_width));
+        header_row = header_row.push(text("Size").width(size_width).size(15));
     }
     if state.show_created {
-        header_row = header_row.push(text("Created").width(standard_width));
+        header_row = header_row.push(text("Created").width(standard_width).size(15));
     }
     if state.show_modified {
-        header_row = header_row.push(text("Modified").width(standard_width));
+        header_row = header_row.push(text("Modified").width(standard_width).size(15));
     }
     if state.show_accessed {
-        header_row = header_row.push(text("Accessed").width(standard_width));
+        header_row = header_row.push(text("Accessed").width(standard_width).size(15));
     }
     if state.show_format {
-        header_row = header_row.push(text("Format").width(standard_width));
+        header_row = header_row.push(text("Format").width(standard_width).size(15));
     }
     if state.calculate_mime {
-        header_row = header_row.push(text("MIME Type").width(standard_width));
+        header_row = header_row.push(text("MIME Type").width(standard_width).size(15));
     }
     if state.calculate_md5 {
-        header_row = header_row.push(text("MD5").width(standard_width));
+        header_row = header_row.push(text("MD5").width(standard_width).size(15));
     }
     if state.calculate_sha256 {
-        header_row = header_row.push(text("SHA256").width(standard_width));
+        header_row = header_row.push(text("SHA256").width(standard_width).size(15));
     }
     if state.calculate_sha512 {
-        header_row = header_row.push(text("SHA512").width(standard_width));
+        header_row = header_row.push(text("SHA512").width(standard_width).size(15));
     }
     
-    // Calculate visible range
-    // Don't constrain scroll_offset since we're using Length::Fill - let it scroll freely
+    // Calculate visible range for virtual scrolling
     let scroll_offset = state.detail_scroll_offset.max(0.0);
     let start_index = (scroll_offset / ROW_HEIGHT) as usize;
     let end_index = (start_index + VISIBLE_ROWS).min(total_files);
@@ -1151,19 +1150,12 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         None
     };
     
-    // Create virtual viewport with explicit width when expanded
-    let mut viewport = if let Some(width) = total_content_width {
-        Column::new().spacing(0).width(Length::Fixed(width))
-    } else {
-        Column::new().spacing(0)
-    };
-    
-    // Add header as first item in scrollable area
-    viewport = viewport.push(header_row);
+    // Create body rows in a virtual scrolling viewport
+    let mut body_rows = Column::new().spacing(0);
     
     // Add spacer for items above viewport
     if start_index > 0 {
-        viewport = viewport.push(Space::new(Length::Fill, start_index as f32 * ROW_HEIGHT));
+        body_rows = body_rows.push(Space::new(Length::Fill, start_index as f32 * ROW_HEIGHT));
     }
     
     // Add visible rows
@@ -1229,34 +1221,52 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                 data_row = data_row.push(text(sha512_text).width(standard_width).size(14));
             }
             
-            viewport = viewport.push(data_row);
+            body_rows = body_rows.push(data_row);
         }
     }
     
     // Add spacer for items below viewport
     let remaining_items = total_files.saturating_sub(end_index);
     if remaining_items > 0 {
-        viewport = viewport.push(Space::new(Length::Fill, remaining_items as f32 * ROW_HEIGHT));
+        body_rows = body_rows.push(Space::new(Length::Fill, remaining_items as f32 * ROW_HEIGHT));
     }
+    
+    // Create the vertical scrollable for body rows
+    let vertical_scrollable = scrollable(body_rows)
+        .height(Length::Fill)
+        .on_scroll(|viewport| {
+            Message::DetailScrolled(viewport.absolute_offset().y)
+        });
+    
+    // Create the table structure: header + body in a column
+    // Wrap in horizontal scrollable only when columns are expanded
+    let table_view: Element<'_, Message> = if state.columns_expanded {
+        // When expanded, set fixed width and enable horizontal scrolling
+        let table_content = column![
+            header_row,
+            vertical_scrollable
+        ]
+        .spacing(0)
+        .width(Length::Fixed(total_content_width.unwrap()));
+        
+        scrollable(table_content)
+            .direction(scrollable::Direction::Horizontal(scrollable::Scrollbar::default()))
+            .height(Length::Fill)
+            .into()
+    } else {
+        // When collapsed, use Fill widths and no horizontal scrolling
+        column![
+            header_row,
+            vertical_scrollable
+        ]
+        .spacing(0)
+        .into()
+    };
     
     column![
         file_count_text,
-        container(
-            scrollable(viewport)
-                .height(Length::Fill)
-                .direction(if state.columns_expanded {
-                    scrollable::Direction::Both {
-                        vertical: scrollable::Scrollbar::default(),
-                        horizontal: scrollable::Scrollbar::default(),
-                    }
-                } else {
-                    scrollable::Direction::Vertical(scrollable::Scrollbar::default())
-                })
-                .on_scroll(|viewport| {
-                    Message::DetailScrolled(viewport.absolute_offset().y)
-                })
-        )
-        .height(Length::Fill)
+        container(table_view)
+            .height(Length::Fill)
     ]
     .spacing(10)
     .into()
