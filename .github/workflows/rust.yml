@@ -40,5 +40,5 @@ jobs:
     - name: Upload GUI build artifact
       uses: actions/upload-artifact@v4
       with:
-        name: splendir_gui-${{ matrix.os }}
-        path: target/release/splendir_gui*
+        name: splendir-${{ matrix.os }}
+        path: target/release/splendir*
