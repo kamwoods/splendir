@@ -2,12 +2,12 @@
 
 [![GitHub issues](https://img.shields.io/github/issues/kamwoods/splendir.svg)](https://github.com/kamwoods/splendir/issues)
 [![Build](https://github.com/kamwoods/splendir/actions/workflows/rust.yml/badge.svg)](https://github.com/kamwoods/splendir/actions/workflows/rust.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![GitHub forks](https://img.shields.io/github/forks/kamwoods/splendir.svg)](https://github.com/kamwoods/splendir/network)
 
 ### A High Performance Directory Scanner and Printer
 
-Splendir is an extremely fast directory scanner with a GUI interface. Splendir generates tree views of files in a directory, customizable lists of file metadata, and high-level reports of directory contents and file type distributions. Releases include executables for Linux (x64) distros, Windows 11 (x64), and macOS (Apple M-series silicon).
+Splendir is an extremely fast directory scanner with a GUI interface. Splendir generates tree views of files in a directory, customizable lists of file metadata, and reports of directory contents and file type distributions. Releases include executables for Linux (x64) distros, Windows 11 (x64), and macOS (Apple M-series silicon).
 
 Features:
 - Multi-threaded processing for high speed scans and hash calculations
@@ -17,7 +17,7 @@ Features:
 - File format identification
 - Directory listings exported as UTF-8 encoded CSV files, tree structures as UTF-8 encoded text files
 
-Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). Multi-threading for hash calculations is implemented using [rayon](https://github.com/rayon-rs/rayon). Splendir is currently in alpha, but releases should be consider "feature complete" for the publicly documented features. The main branch of this repo may include development code that leads the current release.
+Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [iced](https://iced.rs/). Multi-threading for hash calculations is implemented using [rayon](https://github.com/rayon-rs/rayon). Splendir is currently in alpha, but releases can be consider "feature complete" for the publicly documented features. The main branch of this repo may include development code that leads the current release.
 
 ### Install
 
