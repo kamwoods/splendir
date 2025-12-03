@@ -695,6 +695,13 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::ToggleColumnExpansion => {
             state.columns_expanded = !state.columns_expanded;
+            
+            // Restore scroll position after toggling
+            let offset = state.detail_scroll_offset;
+            return scrollable::snap_to(
+                scrollable::Id::new("detailed_results_scroll"),
+                scrollable::RelativeOffset { x: 0.0, y: offset }
+            );
         }
         Message::TreeScrolled(offset) => {
             state.tree_scroll_offset = offset;
