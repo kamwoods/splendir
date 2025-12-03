@@ -695,6 +695,13 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::ToggleColumnExpansion => {
             state.columns_expanded = !state.columns_expanded;
+            
+            // Restore scroll position after toggling
+            let offset = state.detail_scroll_offset;
+            return scrollable::snap_to(
+                scrollable::Id::new("detailed_results_scroll"),
+                scrollable::RelativeOffset { x: 0.0, y: offset }
+            );
         }
         Message::TreeScrolled(offset) => {
             state.tree_scroll_offset = offset;
@@ -1023,7 +1030,7 @@ fn view_results(state: &SplendirGui) -> Element<'_, Message> {
     .into()
 }
 
-// Virtual scrolling for detailed results with sticky header
+// Virtual scrolling for detailed results with conditional sticky header
 fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     if state.scan_results.detailed_files.is_empty() {
         return text("No files found").into();
@@ -1073,7 +1080,7 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         )
     };
     
-    // Build header row with bold text
+    // Build header row
     let mut header_row = row![].spacing(10).padding([0, 10]).height(Length::Fixed(30.0)).align_y(Alignment::Center);
     
     if state.show_filename {
@@ -1150,111 +1157,188 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         None
     };
     
-    // Create body rows in a virtual scrolling viewport
-    let mut body_rows = Column::new().spacing(0);
-    
-    // Add spacer for items above viewport
-    if start_index > 0 {
-        body_rows = body_rows.push(Space::new(Length::Fill, start_index as f32 * ROW_HEIGHT));
-    }
-    
-    // Add visible rows
-    for i in start_index..end_index {
-        if let Some(file) = state.scan_results.detailed_files.get(i) {
-            let mut data_row = row![].spacing(10).padding([0, 10]).height(ROW_HEIGHT).align_y(Alignment::Center);
-            
-            if state.show_filename {
-                data_row = data_row.push(text(&file.name).width(filename_width).size(14));
-            }
-            if state.show_path {
-                data_row = data_row.push(text(&file.directory_path).width(path_width).size(14));
-            }
-            if state.show_path_name {
-                data_row = data_row.push(text(&file.full_path).width(fullpath_width).size(14));
-            }
-            if state.show_size {
-                data_row = data_row.push(text(format_size(file.size)).width(size_width).size(14));
-            }
-            if state.show_created {
-                data_row = data_row.push(text(&file.created).width(standard_width).size(14));
-            }
-            if state.show_modified {
-                data_row = data_row.push(text(&file.last_modified).width(standard_width).size(14));
-            }
-            if state.show_accessed {
-                data_row = data_row.push(text(&file.last_accessed).width(standard_width).size(14));
-            }
-            if state.show_format {
-                data_row = data_row.push(text(&file.format).width(standard_width).size(14));
-            }
-            if state.calculate_mime {
-                data_row = data_row.push(text(&file.mime_type).width(standard_width).size(14));
-            }
-            if state.calculate_md5 {
-                let md5_text = if state.columns_expanded {
-                    file.md5.clone()
-                } else if file.md5.len() > 12 {
-                    format!("{}...", &file.md5[..12])
-                } else {
-                    file.md5.clone()
-                };
-                data_row = data_row.push(text(md5_text).width(standard_width).size(14));
-            }
-            if state.calculate_sha256 {
-                let sha256_text = if state.columns_expanded {
-                    file.sha256.clone()
-                } else if file.sha256.len() > 12 {
-                    format!("{}...", &file.sha256[..12])
-                } else {
-                    file.sha256.clone()
-                };
-                data_row = data_row.push(text(sha256_text).width(standard_width).size(14));
-            }
-            if state.calculate_sha512 {
-                let sha512_text = if state.columns_expanded {
-                    file.sha512.clone()
-                } else if file.sha512.len() > 12 {
-                    format!("{}...", &file.sha512[..12])
-                } else {
-                    file.sha512.clone()
-                };
-                data_row = data_row.push(text(sha512_text).width(standard_width).size(14));
-            }
-            
-            body_rows = body_rows.push(data_row);
-        }
-    }
-    
-    // Add spacer for items below viewport
-    let remaining_items = total_files.saturating_sub(end_index);
-    if remaining_items > 0 {
-        body_rows = body_rows.push(Space::new(Length::Fill, remaining_items as f32 * ROW_HEIGHT));
-    }
-    
-    // Create the vertical scrollable for body rows
-    let vertical_scrollable = scrollable(body_rows)
-        .height(Length::Fill)
-        .on_scroll(|viewport| {
-            Message::DetailScrolled(viewport.absolute_offset().y)
-        });
-    
-    // Create the table structure: header + body in a column
-    // Wrap in horizontal scrollable only when columns are expanded
+    // Build rows based on whether columns are expanded
     let table_view: Element<'_, Message> = if state.columns_expanded {
-        // When expanded, set fixed width and enable horizontal scrolling
-        let table_content = column![
-            header_row,
-            vertical_scrollable
-        ]
-        .spacing(0)
-        .width(Length::Fixed(total_content_width.unwrap()));
+        // EXPANDED MODE: Header scrolls with content (no sticky), single scrollable with Both direction
+        let mut viewport = Column::new().spacing(0).width(Length::Fixed(total_content_width.unwrap()));
         
-        scrollable(table_content)
-            .direction(scrollable::Direction::Horizontal(scrollable::Scrollbar::default()))
+        // Add header to viewport
+        viewport = viewport.push(header_row);
+        
+        // Add spacer for items above viewport
+        if start_index > 0 {
+            viewport = viewport.push(Space::new(Length::Fill, start_index as f32 * ROW_HEIGHT));
+        }
+        
+        // Add visible rows
+        for i in start_index..end_index {
+            if let Some(file) = state.scan_results.detailed_files.get(i) {
+                let mut data_row = row![].spacing(10).padding([0, 10]).height(ROW_HEIGHT).align_y(Alignment::Center);
+                
+                if state.show_filename {
+                    data_row = data_row.push(text(&file.name).width(filename_width).size(14));
+                }
+                if state.show_path {
+                    data_row = data_row.push(text(&file.directory_path).width(path_width).size(14));
+                }
+                if state.show_path_name {
+                    data_row = data_row.push(text(&file.full_path).width(fullpath_width).size(14));
+                }
+                if state.show_size {
+                    data_row = data_row.push(text(format_size(file.size)).width(size_width).size(14));
+                }
+                if state.show_created {
+                    data_row = data_row.push(text(&file.created).width(standard_width).size(14));
+                }
+                if state.show_modified {
+                    data_row = data_row.push(text(&file.last_modified).width(standard_width).size(14));
+                }
+                if state.show_accessed {
+                    data_row = data_row.push(text(&file.last_accessed).width(standard_width).size(14));
+                }
+                if state.show_format {
+                    data_row = data_row.push(text(&file.format).width(standard_width).size(14));
+                }
+                if state.calculate_mime {
+                    data_row = data_row.push(text(&file.mime_type).width(standard_width).size(14));
+                }
+                if state.calculate_md5 {
+                    let md5_text = if state.columns_expanded {
+                        file.md5.clone()
+                    } else if file.md5.len() > 12 {
+                        format!("{}...", &file.md5[..12])
+                    } else {
+                        file.md5.clone()
+                    };
+                    data_row = data_row.push(text(md5_text).width(standard_width).size(14));
+                }
+                if state.calculate_sha256 {
+                    let sha256_text = if state.columns_expanded {
+                        file.sha256.clone()
+                    } else if file.sha256.len() > 12 {
+                        format!("{}...", &file.sha256[..12])
+                    } else {
+                        file.sha256.clone()
+                    };
+                    data_row = data_row.push(text(sha256_text).width(standard_width).size(14));
+                }
+                if state.calculate_sha512 {
+                    let sha512_text = if state.columns_expanded {
+                        file.sha512.clone()
+                    } else if file.sha512.len() > 12 {
+                        format!("{}...", &file.sha512[..12])
+                    } else {
+                        file.sha512.clone()
+                    };
+                    data_row = data_row.push(text(sha512_text).width(standard_width).size(14));
+                }
+                
+                viewport = viewport.push(data_row);
+            }
+        }
+        
+        // Add spacer for items below viewport
+        let remaining_items = total_files.saturating_sub(end_index);
+        if remaining_items > 0 {
+            viewport = viewport.push(Space::new(Length::Fill, remaining_items as f32 * ROW_HEIGHT));
+        }
+        
+        scrollable(viewport)
+            .id(scrollable::Id::new("detailed_results_scroll"))
             .height(Length::Fill)
+            .direction(scrollable::Direction::Both {
+                vertical: scrollable::Scrollbar::default(),
+                horizontal: scrollable::Scrollbar::default(),
+            })
+            .on_scroll(|viewport| {
+                Message::DetailScrolled(viewport.absolute_offset().y)
+            })
             .into()
     } else {
-        // When collapsed, use Fill widths and no horizontal scrolling
+        // COLLAPSED MODE: Sticky header with nested scrollables
+        let mut body_rows = Column::new().spacing(0);
+        
+        // Add spacer for items above viewport
+        if start_index > 0 {
+            body_rows = body_rows.push(Space::new(Length::Fill, start_index as f32 * ROW_HEIGHT));
+        }
+        
+        // Add visible rows
+        for i in start_index..end_index {
+            if let Some(file) = state.scan_results.detailed_files.get(i) {
+                let mut data_row = row![].spacing(10).padding([0, 10]).height(ROW_HEIGHT).align_y(Alignment::Center);
+                
+                if state.show_filename {
+                    data_row = data_row.push(text(&file.name).width(filename_width).size(14));
+                }
+                if state.show_path {
+                    data_row = data_row.push(text(&file.directory_path).width(path_width).size(14));
+                }
+                if state.show_path_name {
+                    data_row = data_row.push(text(&file.full_path).width(fullpath_width).size(14));
+                }
+                if state.show_size {
+                    data_row = data_row.push(text(format_size(file.size)).width(size_width).size(14));
+                }
+                if state.show_created {
+                    data_row = data_row.push(text(&file.created).width(standard_width).size(14));
+                }
+                if state.show_modified {
+                    data_row = data_row.push(text(&file.last_modified).width(standard_width).size(14));
+                }
+                if state.show_accessed {
+                    data_row = data_row.push(text(&file.last_accessed).width(standard_width).size(14));
+                }
+                if state.show_format {
+                    data_row = data_row.push(text(&file.format).width(standard_width).size(14));
+                }
+                if state.calculate_mime {
+                    data_row = data_row.push(text(&file.mime_type).width(standard_width).size(14));
+                }
+                if state.calculate_md5 {
+                    let md5_text = if file.md5.len() > 12 {
+                        format!("{}...", &file.md5[..12])
+                    } else {
+                        file.md5.clone()
+                    };
+                    data_row = data_row.push(text(md5_text).width(standard_width).size(14));
+                }
+                if state.calculate_sha256 {
+                    let sha256_text = if file.sha256.len() > 12 {
+                        format!("{}...", &file.sha256[..12])
+                    } else {
+                        file.sha256.clone()
+                    };
+                    data_row = data_row.push(text(sha256_text).width(standard_width).size(14));
+                }
+                if state.calculate_sha512 {
+                    let sha512_text = if file.sha512.len() > 12 {
+                        format!("{}...", &file.sha512[..12])
+                    } else {
+                        file.sha512.clone()
+                    };
+                    data_row = data_row.push(text(sha512_text).width(standard_width).size(14));
+                }
+                
+                body_rows = body_rows.push(data_row);
+            }
+        }
+        
+        // Add spacer for items below viewport
+        let remaining_items = total_files.saturating_sub(end_index);
+        if remaining_items > 0 {
+            body_rows = body_rows.push(Space::new(Length::Fill, remaining_items as f32 * ROW_HEIGHT));
+        }
+        
+        // Vertical scrollable for body with same ID as expanded mode
+        let vertical_scrollable = scrollable(body_rows)
+            .id(scrollable::Id::new("detailed_results_scroll"))
+            .height(Length::Fill)
+            .on_scroll(|viewport| {
+                Message::DetailScrolled(viewport.absolute_offset().y)
+            });
+        
+        // Sticky header above scrollable body
         column![
             header_row,
             vertical_scrollable
