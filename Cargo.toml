@@ -1,6 +1,6 @@
 [package]
 name = "splendir"
-version = "0.1.0-alpha.13"
+version = "0.1.0-alpha.14"
 edition = "2021"
 authors = ["Kam Woods"]
 description = "A directory scanner with a GUI interface"

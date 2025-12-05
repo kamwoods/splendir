@@ -1060,7 +1060,8 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
             .unwrap_or(30);
         
         // Character width and padding
-        let char_width = 7.0;
+        // Using 8.0 instead of 7.0 to account for wider characters and ensure no truncation
+        let char_width = 8.0;
         let padding = 10.0;
         
         let fn_width = Length::Fixed((max_filename_len as f32 * char_width + padding).max(150.0));
