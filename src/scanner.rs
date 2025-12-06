@@ -308,7 +308,9 @@ impl DirectoryScanner {
             } else if entry.file_type().is_file() {
                 stats.file_count += 1;
                 if let Ok(metadata) = entry.metadata() {
-                    stats.total_size += metadata.len();
+                    let size = metadata.len();
+                    stats.total_size += size;
+                    stats.size_distribution.add_file(size);
                 }
             }
         }
@@ -423,6 +425,98 @@ pub struct DirectoryStats {
     pub file_count: usize,
     pub directory_count: usize,
     pub total_size: u64,
+    /// File size distribution counts
+    pub size_distribution: FileSizeDistribution,
+}
+
+/// Distribution of files by size ranges
+#[derive(Debug, Default, Clone)]
+pub struct FileSizeDistribution {
+    /// Empty files (0 bytes)
+    pub empty: usize,
+    /// 1 byte to 9 bytes
+    pub tiny: usize,
+    /// 10 bytes to 99 bytes
+    pub very_small: usize,
+    /// 100 bytes to 999 bytes
+    pub small: usize,
+    /// 1 KB to 9.99 KB
+    pub small_kb: usize,
+    /// 10 KB to 99.99 KB
+    pub medium_kb: usize,
+    /// 100 KB to 999.99 KB
+    pub large_kb: usize,
+    /// 1 MB to 9.99 MB
+    pub small_mb: usize,
+    /// 10 MB to 99.99 MB
+    pub medium_mb: usize,
+    /// 100 MB to 999.99 MB
+    pub large_mb: usize,
+    /// 1 GB to 9.99 GB
+    pub small_gb: usize,
+    /// 10 GB to 99.99 GB
+    pub medium_gb: usize,
+    /// 100 GB and above
+    pub huge: usize,
+}
+
+impl FileSizeDistribution {
+    /// Categorize a file size and increment the appropriate counter
+    pub fn add_file(&mut self, size: u64) {
+        const KB: u64 = 1024;
+        const MB: u64 = 1024 * KB;
+        const GB: u64 = 1024 * MB;
+        
+        match size {
+            0 => self.empty += 1,
+            1..=9 => self.tiny += 1,
+            10..=99 => self.very_small += 1,
+            100..=999 => self.small += 1,
+            s if s < 10 * KB => self.small_kb += 1,
+            s if s < 100 * KB => self.medium_kb += 1,
+            s if s < MB => self.large_kb += 1,
+            s if s < 10 * MB => self.small_mb += 1,
+            s if s < 100 * MB => self.medium_mb += 1,
+            s if s < GB => self.large_mb += 1,
+            s if s < 10 * GB => self.small_gb += 1,
+            s if s < 100 * GB => self.medium_gb += 1,
+            _ => self.huge += 1,
+        }
+    }
+    
+    /// Get a formatted summary of the distribution
+    pub fn summary(&self) -> String {
+        let mut lines = Vec::new();
+        
+        // Only include non-zero buckets for cleaner output
+        let buckets = [
+            ("Empty (0 bytes)", self.empty),
+            ("1 B – 9 B", self.tiny),
+            ("10 B – 99 B", self.very_small),
+            ("100 B – 999 B", self.small),
+            ("1 KB – 9.99 KB", self.small_kb),
+            ("10 KB – 99.99 KB", self.medium_kb),
+            ("100 KB – 999.99 KB", self.large_kb),
+            ("1 MB – 9.99 MB", self.small_mb),
+            ("10 MB – 99.99 MB", self.medium_mb),
+            ("100 MB – 999.99 MB", self.large_mb),
+            ("1 GB – 9.99 GB", self.small_gb),
+            ("10 GB – 99.99 GB", self.medium_gb),
+            ("100 GB+", self.huge),
+        ];
+        
+        for (label, count) in buckets {
+            if count > 0 {
+                lines.push(format!("  {}: {}", label, count));
+            }
+        }
+        
+        if lines.is_empty() {
+            "  No files".to_string()
+        } else {
+            lines.join("\n")
+        }
+    }
 }
 
 impl DirectoryStats {
