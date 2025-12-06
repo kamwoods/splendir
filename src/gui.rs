@@ -696,11 +696,14 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         Message::ToggleColumnExpansion => {
             state.columns_expanded = !state.columns_expanded;
             
-            // Restore scroll position after toggling
+            // Restore scroll position after toggling using absolute offset
+            // We use scroll_to with AbsoluteOffset (pixel position) instead of
+            // snap_to with RelativeOffset (0.0-1.0 percentage) because we track
+            // the actual pixel offset in detail_scroll_offset
             let offset = state.detail_scroll_offset;
-            return scrollable::snap_to(
+            return scrollable::scroll_to(
                 scrollable::Id::new("detailed_results_scroll"),
-                scrollable::RelativeOffset { x: 0.0, y: offset }
+                scrollable::AbsoluteOffset { x: 0.0, y: offset }
             );
         }
         Message::TreeScrolled(offset) => {
