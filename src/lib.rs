@@ -7,7 +7,7 @@ pub mod scanner;
 pub mod tree;
 
 // Re-export commonly used types and functions for convenience
-pub use scanner::{DirectoryScanner, DirectoryStats, validate_path, process_file, calculate_sha256, calculate_md5, format_file_size, ProgressCallback};
+pub use scanner::{DirectoryScanner, DirectoryStats, FileSizeDistribution, validate_path, process_file, calculate_sha256, calculate_md5, format_file_size, ProgressCallback};
 pub use tree::{TreeFormatter, TreeFormatOptions, TreeLine, FileType, get_file_color, filter_tree_by_type, count_files_by_type};
 
 // Core data structures
@@ -248,6 +248,11 @@ impl DirectoryAnalysis {
             "Total size: {}\n\n",
             self.stats.format_size()
         ));
+        
+        // File size distribution
+        summary.push_str("File size distribution:\n");
+        summary.push_str(&self.stats.size_distribution.summary());
+        summary.push_str("\n\n");
         
         summary.push_str("File types:\n");
         let mut sorted_types: Vec<_> = self.file_type_counts.iter().collect();
