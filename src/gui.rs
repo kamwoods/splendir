@@ -58,15 +58,17 @@ enum ScanPreset {
     Default,
     DefaultMD5,
     DefaultSHA256,
+    DefaultSHA512,
     Minimal,
     Complete,
 }
 
 impl ScanPreset {
-    const ALL: [ScanPreset; 5] = [
+    const ALL: [ScanPreset; 6] = [
         ScanPreset::Default,
         ScanPreset::DefaultMD5,
         ScanPreset::DefaultSHA256,
+        ScanPreset::DefaultSHA512,
         ScanPreset::Minimal,
         ScanPreset::Complete,
     ];
@@ -78,6 +80,7 @@ impl std::fmt::Display for ScanPreset {
             ScanPreset::Default => write!(f, "Default"),
             ScanPreset::DefaultMD5 => write!(f, "Default+MD5"),
             ScanPreset::DefaultSHA256 => write!(f, "Default+SHA256"),
+            ScanPreset::DefaultSHA512 => write!(f, "Default+SHA512"),
             ScanPreset::Minimal => write!(f, "Minimal"),
             ScanPreset::Complete => write!(f, "Complete"),
         }
@@ -374,10 +377,11 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             // Update options based on preset
             match preset {
                 ScanPreset::Minimal => {
+                    state.include_hidden = false;
+                    state.follow_symlinks = false;
                     state.calculate_md5 = false;
                     state.calculate_sha256 = false;
                     state.calculate_sha512 = false;
-                    // state.max_depth = "3".to_string();
                     state.max_depth = String::new();
                     state.colorize_output = false;
                     // Minimal: minimal columns
@@ -457,6 +461,26 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.calculate_md5 = false;
                     state.calculate_sha256 = true;
                     state.calculate_sha512 = false;
+                    state.max_depth = String::new();
+                    state.colorize_output = false;
+                    // Default: File Name, Path, Size, Modified
+                    state.show_filename = true;
+                    state.show_path = true;
+                    state.show_path_name = false;
+                    state.show_size = true;
+                    state.show_created = false;
+                    state.show_modified = true;
+                    state.show_accessed = false;
+                    state.show_format = false;
+                    state.calculate_format = false;
+                    state.calculate_mime = false;
+                }
+                ScanPreset::DefaultSHA512 => {
+                    state.include_hidden = false;
+                    state.follow_symlinks = false;
+                    state.calculate_md5 = false;
+                    state.calculate_sha256 = false;
+                    state.calculate_sha512 = true;
                     state.max_depth = String::new();
                     state.colorize_output = false;
                     // Default: File Name, Path, Size, Modified
