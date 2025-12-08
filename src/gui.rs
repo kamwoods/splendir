@@ -93,18 +93,22 @@ enum SortBy {
     FileName,
     Size,
     Created,
-    Accessed,
     Modified,
+    Accessed,
+    Format,
+    MimeType,
 }
 
 impl SortBy {
-    const ALL: [SortBy; 6] = [
+    const ALL: [SortBy; 8] = [
         SortBy::TreeDefault,
         SortBy::FileName,
         SortBy::Size,
         SortBy::Created,
-        SortBy::Accessed,
         SortBy::Modified,
+        SortBy::Accessed,
+        SortBy::Format,
+        SortBy::MimeType,
     ];
 }
 
@@ -115,8 +119,10 @@ impl std::fmt::Display for SortBy {
             SortBy::FileName => write!(f, "File Name"),
             SortBy::Size => write!(f, "Size"),
             SortBy::Created => write!(f, "Created"),
-            SortBy::Accessed => write!(f, "Accessed"),
             SortBy::Modified => write!(f, "Modified"),
+            SortBy::Accessed => write!(f, "Accessed"),
+            SortBy::Format => write!(f, "Format"),
+            SortBy::MimeType => write!(f, "MIME Type"),
         }
     }
 }
@@ -160,7 +166,7 @@ struct SplendirGui {
     selected_path: String,
     scan_mode: ScanMode,
     scan_preset: ScanPreset,
-    include_hidden: bool,
+    include_dotfiles: bool,
     follow_symlinks: bool,
     calculate_md5: bool,
     calculate_sha256: bool,
@@ -234,7 +240,7 @@ impl Default for SplendirGui {
             selected_path: String::new(),
             scan_mode: ScanMode::default(),
             scan_preset: ScanPreset::default(),
-            include_hidden: false,
+            include_dotfiles: false,
             follow_symlinks: false,
             calculate_md5: false,
             calculate_sha256: false,
@@ -293,7 +299,7 @@ enum Message {
     PathSelected(Option<PathBuf>),
     ScanModeSelected(ScanMode),
     PresetSelected(ScanPreset),
-    IncludeHiddenToggled(bool),
+    IncludeDotfilesToggled(bool),
     FollowSymlinksToggled(bool),
     CalculateSHA256Toggled(bool),
     CalculateSHA512Toggled(bool),
@@ -377,7 +383,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             // Update options based on preset
             match preset {
                 ScanPreset::Minimal => {
-                    state.include_hidden = false;
+                    state.include_dotfiles = false;
                     state.follow_symlinks = false;
                     state.calculate_md5 = false;
                     state.calculate_sha256 = false;
@@ -396,7 +402,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.calculate_mime = false;
                 }
                 ScanPreset::Complete => {
-                    state.include_hidden = true;
+                    state.include_dotfiles = true;
                     state.follow_symlinks = true;
                     state.calculate_md5 = true;
                     state.calculate_sha256 = true;
@@ -416,7 +422,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.calculate_mime = true;
                 }
                 ScanPreset::Default => {
-                    state.include_hidden = false;
+                    state.include_dotfiles = false;
                     state.follow_symlinks = false;
                     state.calculate_md5 = false;
                     state.calculate_sha256 = false;
@@ -436,7 +442,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.calculate_mime = false;
                 }
                 ScanPreset::DefaultMD5 => {
-                    state.include_hidden = false;
+                    state.include_dotfiles = false;
                     state.follow_symlinks = false;
                     state.calculate_md5 = true;
                     state.calculate_sha256 = false;
@@ -456,7 +462,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.calculate_mime = false;
                 }
                 ScanPreset::DefaultSHA256 => {
-                    state.include_hidden = false;
+                    state.include_dotfiles = false;
                     state.follow_symlinks = false;
                     state.calculate_md5 = false;
                     state.calculate_sha256 = true;
@@ -476,7 +482,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.calculate_mime = false;
                 }
                 ScanPreset::DefaultSHA512 => {
-                    state.include_hidden = false;
+                    state.include_dotfiles = false;
                     state.follow_symlinks = false;
                     state.calculate_md5 = false;
                     state.calculate_sha256 = false;
@@ -497,8 +503,8 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                 }
             }
         }
-        Message::IncludeHiddenToggled(value) => {
-            state.include_hidden = value;
+        Message::IncludeDotfilesToggled(value) => {
+            state.include_dotfiles = value;
         }
         Message::FollowSymlinksToggled(value) => {
             state.follow_symlinks = value;
@@ -848,7 +854,7 @@ fn subscription(state: &SplendirGui) -> iced::Subscription<Message> {
 
 fn create_scanner(state: &SplendirGui) -> DirectoryScanner {
     let mut scanner = DirectoryScanner::new()
-        .include_hidden(state.include_hidden)
+        .include_dotfiles(state.include_dotfiles)
         .follow_symlinks(state.follow_symlinks)
         .calculate_sha256(state.calculate_sha256)
         .calculate_sha512(state.calculate_sha512)
@@ -915,7 +921,7 @@ fn view_options(state: &SplendirGui) -> Element<'_, Message> {
     let traversal_section = column![
         text("Traversal Options").size(16).font(Font { weight: iced::font::Weight::Bold, ..Font::default() }).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
         column![
-            checkbox("Include hidden files", state.include_hidden).on_toggle(Message::IncludeHiddenToggled),
+            checkbox("Include dotfiles", state.include_dotfiles).on_toggle(Message::IncludeDotfilesToggled),
             checkbox("Follow symlinks", state.follow_symlinks).on_toggle(Message::FollowSymlinksToggled),
             row![text("Max Depth:").width(80), text_input("", &state.max_depth)
                 .on_input(Message::MaxDepthChanged)
@@ -1646,7 +1652,7 @@ async fn perform_scan_with_progress(
                 }
             });
             
-            match analyze_directory_with_progress(&path, scanner.include_hidden, scanner.max_depth, progress_callback) {
+            match analyze_directory_with_progress(&path, scanner.include_dotfiles, scanner.max_depth, progress_callback) {
                 Ok(analysis) => {
                     results.analysis_output = analysis.summary();
                 }
@@ -1808,8 +1814,10 @@ fn sort_files(files: &mut Vec<FileInfo>, original_order: &[FileInfo], sort_by: S
             SortBy::FileName => a.name.cmp(&b.name),
             SortBy::Size => a.size.cmp(&b.size),
             SortBy::Created => a.created.cmp(&b.created),
-            SortBy::Accessed => a.last_accessed.cmp(&b.last_accessed),
             SortBy::Modified => a.last_modified.cmp(&b.last_modified),
+            SortBy::Accessed => a.last_accessed.cmp(&b.last_accessed),
+            SortBy::Format => a.format.cmp(&b.format),
+            SortBy::MimeType => a.mime_type.cmp(&b.mime_type),
         };
         
         match sort_order {
