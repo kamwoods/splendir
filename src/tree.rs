@@ -5,7 +5,7 @@ use crate::TreeNode;
 #[derive(Debug, Clone)]
 pub struct TreeFormatOptions {
     pub colorize: bool,
-    pub show_hidden: bool,
+    pub show_dotfiles: bool,
     pub use_unicode: bool,
     pub show_file_sizes: bool,
     pub show_permissions: bool,
@@ -15,7 +15,7 @@ impl Default for TreeFormatOptions {
     fn default() -> Self {
         Self {
             colorize: false,
-            show_hidden: false,
+            show_dotfiles: false,
             use_unicode: true,
             show_file_sizes: false,
             show_permissions: false,
@@ -33,8 +33,8 @@ impl TreeFormatOptions {
         self
     }
     
-    pub fn show_hidden(mut self, show: bool) -> Self {
-        self.show_hidden = show;
+    pub fn show_dotfiles(mut self, show: bool) -> Self {
+        self.show_dotfiles = show;
         self
     }
     

@@ -16,7 +16,7 @@ pub type ProgressCallback = Arc<dyn Fn(f32, String) + Send + Sync>;
 /// Core directory scanner with configurable options
 #[derive(Clone)]
 pub struct DirectoryScanner {
-    pub include_hidden: bool,
+    pub include_dotfiles: bool,
     pub max_depth: Option<usize>,
     pub follow_symlinks: bool,
     pub calculate_sha256: bool,
@@ -30,7 +30,7 @@ pub struct DirectoryScanner {
 impl std::fmt::Debug for DirectoryScanner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DirectoryScanner")
-            .field("include_hidden", &self.include_hidden)
+            .field("include_dotfiles", &self.include_dotfiles)
             .field("max_depth", &self.max_depth)
             .field("follow_symlinks", &self.follow_symlinks)
             .field("calculate_sha256", &self.calculate_sha256)
@@ -46,7 +46,7 @@ impl std::fmt::Debug for DirectoryScanner {
 impl Default for DirectoryScanner {
     fn default() -> Self {
         Self {
-            include_hidden: false,
+            include_dotfiles: false,
             max_depth: None,
             follow_symlinks: false,
             calculate_sha256: true,
@@ -64,8 +64,8 @@ impl DirectoryScanner {
         Self::default()
     }
     
-    pub fn include_hidden(mut self, include: bool) -> Self {
-        self.include_hidden = include;
+    pub fn include_dotfiles(mut self, include: bool) -> Self {
+        self.include_dotfiles = include;
         self
     }
     
@@ -329,8 +329,8 @@ impl DirectoryScanner {
     
     /// Check if a file/directory should be included based on scanner settings
     fn should_include_entry(&self, path: &Path) -> bool {
-        if !self.include_hidden {
-            // Check all components in the path for hidden directories
+        if !self.include_dotfiles {
+            // Check all components in the path for dotfiles/directories (starting with '.')
             for component in path.components() {
                 if let std::path::Component::Normal(name) = component {
                     if name.to_string_lossy().starts_with('.') {

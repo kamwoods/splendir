@@ -7,10 +7,11 @@
 
 ### A High Performance Directory Scanner and Printer
 
-Splendir is an extremely fast directory scanner with a GUI interface. Splendir generates tree views of files in a directory, customizable lists of file metadata, and reports of directory contents and file type distributions. Releases include executables for Linux (x64) distros, Windows 11 (x64), and macOS (Apple M-series silicon).
+Splendir is an extremely fast cross-platform directory scanner with a GUI interface. Splendir generates tree views of files in a directory, customizable lists of file metadata (including file types, MIME types, and hashes), and reports of directory contents and file type distributions.
 
 Features:
 - Multi-threaded processing for high speed scans and hash calculations
+- Autodetects filesystem on which directory is being scanned
 - Virtual scrolling in tree and file list modes for live views of millions of files
 - Multiple scan presets
 - Live sorting of output in file list view
@@ -21,7 +22,7 @@ Splendir is built in [Rust](https://rust-lang.org/) and implements a GUI in [ice
 
 ### Install
 
-Releases include a Ubuntu/Debian package and standalone executables for Linux, Windows 11 (x64) and macOS (Apple silicon). Follow the instructions in one of the sections below.
+Releases include a Ubuntu/Debian package and standalone executables for Linux (x64), Windows 11 (x64) and macOS (Apple M-series silicon). Follow the instructions in one of the sections below.
 
 **Ubuntu/Debian**
 

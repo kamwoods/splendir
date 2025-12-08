@@ -1,6 +1,6 @@
 [package]
 name = "splendir"
-version = "0.1.0-alpha.17"
+version = "0.1.0-alpha.18"
 edition = "2021"
 authors = ["Kam Woods"]
 description = "A directory scanner with a GUI interface"
@@ -34,6 +34,10 @@ tokio = { version = "1.48", features = ["full"], optional = true }
 
 # Optional: for better error handling
 anyhow = "1.0"
+
+# Windows-specific filesystem detection
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
 
 [build-dependencies]
 # For embedding Windows icon

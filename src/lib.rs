@@ -5,10 +5,12 @@ use std::sync::Arc;
 // Re-export modules for external use
 pub mod scanner;
 pub mod tree;
+pub mod filesystem;
 
 // Re-export commonly used types and functions for convenience
 pub use scanner::{DirectoryScanner, DirectoryStats, FileSizeDistribution, validate_path, process_file, calculate_sha256, calculate_md5, format_file_size, ProgressCallback};
 pub use tree::{TreeFormatter, TreeFormatOptions, TreeLine, FileType, get_file_color, filter_tree_by_type, count_files_by_type};
+pub use filesystem::{FilesystemType, VolumeInfo, detect_filesystem};
 
 // Core data structures
 #[derive(Debug, Clone)]
@@ -160,32 +162,34 @@ pub fn format_tree_lines(tree: &TreeNode, colorize: bool) -> Vec<TreeLine> {
 }
 
 /// Comprehensive directory analysis
-pub fn analyze_directory(path: &Path, include_hidden: bool, max_depth: Option<usize>) -> Result<DirectoryAnalysis, ScanError> {
+pub fn analyze_directory(path: &Path, include_dotfiles: bool, max_depth: Option<usize>) -> Result<DirectoryAnalysis, ScanError> {
     let scanner = DirectoryScanner::new()
-        .include_hidden(include_hidden)
+        .include_dotfiles(include_dotfiles)
         .max_depth(max_depth.unwrap_or(50)); // Reasonable default max depth
     
     let stats = scanner.scan_stats(path)?;
     let tree = scanner.scan_tree(path)?;
     let file_type_counts = count_files_by_type(&tree);
+    let volume_info = filesystem::detect_filesystem(path);
     
     Ok(DirectoryAnalysis {
         stats,
         tree,
         file_type_counts,
         path: path.to_path_buf(),
+        volume_info,
     })
 }
 
 /// Comprehensive directory analysis with progress reporting
 pub fn analyze_directory_with_progress(
     path: &Path, 
-    include_hidden: bool, 
+    include_dotfiles: bool, 
     max_depth: Option<usize>,
     progress_callback: ProgressCallback
 ) -> Result<DirectoryAnalysis, ScanError> {
     let scanner = DirectoryScanner::new()
-        .include_hidden(include_hidden)
+        .include_dotfiles(include_dotfiles)
         .max_depth(max_depth.unwrap_or(50));
     
     // For analysis, we'll divide progress into three phases
@@ -205,6 +209,9 @@ pub fn analyze_directory_with_progress(
     
     progress_callback(0.0, "Starting analysis...".to_string());
     
+    // Detect filesystem (fast, do it first)
+    let volume_info = filesystem::detect_filesystem(path);
+    
     let stats = scanner.scan_stats_with_progress(path, Some(stats_callback))?;
     let tree = scanner.scan_tree_with_progress(path, Some(tree_callback))?;
     
@@ -218,6 +225,7 @@ pub fn analyze_directory_with_progress(
         tree,
         file_type_counts,
         path: path.to_path_buf(),
+        volume_info,
     })
 }
 
@@ -228,6 +236,7 @@ pub struct DirectoryAnalysis {
     pub tree: TreeNode,
     pub file_type_counts: std::collections::HashMap<FileType, usize>,
     pub path: PathBuf,
+    pub volume_info: Option<filesystem::VolumeInfo>,
 }
 
 impl DirectoryAnalysis {
@@ -237,6 +246,21 @@ impl DirectoryAnalysis {
             "Directory: {}\n",
             self.path.display()
         );
+        
+        // Filesystem info
+        if let Some(ref vol_info) = self.volume_info {
+            let mut fs_line = format!("Filesystem: {}", vol_info.filesystem_type);
+            if vol_info.is_remote {
+                fs_line.push_str(" (network)");
+            }
+            if let Some(ref label) = vol_info.label {
+                if !label.is_empty() {
+                    fs_line.push_str(&format!(" [{}]", label));
+                }
+            }
+            fs_line.push('\n');
+            summary.push_str(&fs_line);
+        }
         
         summary.push_str(&format!(
             "Total: {} files, {} directories\n",
@@ -309,7 +333,7 @@ impl ScannerPresets {
     /// Complete scan with all features enabled
     pub fn complete() -> DirectoryScanner {
         DirectoryScanner::new()
-            .include_hidden(true)
+            .include_dotfiles(true)
             .follow_symlinks(true)
             .calculate_md5(true)
             .calculate_sha256(true)
@@ -319,7 +343,7 @@ impl ScannerPresets {
     /// Default scan with MD5 enabled
     pub fn defaultmd5() -> DirectoryScanner {
         DirectoryScanner::new()
-            .include_hidden(false)
+            .include_dotfiles(false)
             .follow_symlinks(false)
             .calculate_md5(true)
             .calculate_sha256(false)
@@ -329,7 +353,7 @@ impl ScannerPresets {
     /// Default scan with SHA256 enabled
     pub fn defaultsha256() -> DirectoryScanner {
         DirectoryScanner::new()
-            .include_hidden(false)
+            .include_dotfiles(false)
             .follow_symlinks(false)
             .calculate_md5(false)
             .calculate_sha256(true)
@@ -339,7 +363,7 @@ impl ScannerPresets {
     /// Default scan with SHA512 enabled
     pub fn defaultsha512() -> DirectoryScanner {
         DirectoryScanner::new()
-            .include_hidden(false)
+            .include_dotfiles(false)
             .follow_symlinks(false)
             .calculate_md5(false)
             .calculate_sha256(false)
