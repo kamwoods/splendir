@@ -144,6 +144,10 @@ fn detect_filesystem_windows(path: &Path) -> Option<VolumeInfo> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
     
+    // Drive type constants from Windows API
+    // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getdrivetypew
+    const DRIVE_REMOTE: u32 = 4;
+    
     // Get the volume root path (e.g., "C:\")
     let path_str = path.to_string_lossy();
     
@@ -224,7 +228,7 @@ fn detect_filesystem_windows(path: &Path) -> Option<VolumeInfo> {
     let drive_type = unsafe {
         windows_sys::Win32::Storage::FileSystem::GetDriveTypeW(root_wide.as_ptr())
     };
-    let is_remote = drive_type == windows_sys::Win32::Storage::FileSystem::DRIVE_REMOTE;
+    let is_remote = drive_type == DRIVE_REMOTE;
     
     // Parse filesystem type
     let filesystem_type = match fs_name_string.to_uppercase().as_str() {
