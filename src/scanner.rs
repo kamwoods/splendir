@@ -7,11 +7,33 @@ use walkdir::WalkDir;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
 use rayon::prelude::*;
+use std::collections::HashSet;
 
 use crate::{FileInfo, TreeNode, ScanError};
 
 /// Progress callback type for reporting scan progress
 pub type ProgressCallback = Arc<dyn Fn(f32, String) + Send + Sync>;
+
+/// Virtual/pseudo filesystem types that should typically be skipped
+const VIRTUAL_FS_TYPES: &[&str] = &[
+    "proc", "sysfs", "devfs", "devtmpfs", "tmpfs", "cgroup", "cgroup2",
+    "debugfs", "securityfs", "fusectl", "configfs", "pstore", "efivarfs",
+    "bpf", "tracefs", "hugetlbfs", "mqueue", "devpts", "autofs",
+    "binfmt_misc", "rpc_pipefs", "nfsd", "fuse.gvfsd-fuse", "fuse.portal",
+];
+
+/// Paths that should always be skipped when scanning from root
+/// These are used as a fallback when filesystem type detection isn't available
+const VIRTUAL_PATHS_LINUX: &[&str] = &[
+    "/proc", "/sys", "/dev", "/run", "/snap", "/tmp",
+];
+
+#[cfg(target_os = "macos")]
+const VIRTUAL_PATHS_MACOS: &[&str] = &[
+    "/dev", "/System/Volumes/Data/.Spotlight-V100",
+    "/System/Volumes/Data/.fseventsd",
+    "/private/var/vm", "/cores",
+];
 
 /// Core directory scanner with configurable options
 #[derive(Clone)]
@@ -25,6 +47,10 @@ pub struct DirectoryScanner {
     pub calculate_format: bool,
     pub calculate_mime: bool,
     pub cancellation_flag: Option<Arc<AtomicBool>>,
+    /// Skip known virtual/pseudo filesystems (proc, sysfs, devfs, etc.)
+    pub skip_virtual_filesystems: bool,
+    /// Stay on the same filesystem (don't cross mount boundaries)
+    pub stay_on_filesystem: bool,
 }
 
 impl std::fmt::Debug for DirectoryScanner {
@@ -38,6 +64,8 @@ impl std::fmt::Debug for DirectoryScanner {
             .field("calculate_md5", &self.calculate_md5)
             .field("calculate_format", &self.calculate_format)
             .field("calculate_mime", &self.calculate_mime)
+            .field("skip_virtual_filesystems", &self.skip_virtual_filesystems)
+            .field("stay_on_filesystem", &self.stay_on_filesystem)
             .field("cancellation_flag", &"<Arc<AtomicBool>>")
             .finish()
     }
@@ -55,6 +83,8 @@ impl Default for DirectoryScanner {
             calculate_format: false,
             calculate_mime: false,
             cancellation_flag: None,
+            skip_virtual_filesystems: true,  // Safe default
+            stay_on_filesystem: false,
         }
     }
 }
@@ -109,6 +139,16 @@ impl DirectoryScanner {
         self
     }
     
+    pub fn skip_virtual_filesystems(mut self, skip: bool) -> Self {
+        self.skip_virtual_filesystems = skip;
+        self
+    }
+    
+    pub fn stay_on_filesystem(mut self, stay: bool) -> Self {
+        self.stay_on_filesystem = stay;
+        self
+    }
+    
     /// Scan directory and return detailed file information
     pub fn scan_detailed(&self, path: &Path) -> Result<Vec<FileInfo>, ScanError> {
         self.scan_detailed_with_progress(path, None)
@@ -121,6 +161,13 @@ impl DirectoryScanner {
         progress_callback: Option<ProgressCallback>
     ) -> Result<Vec<FileInfo>, ScanError> {
         validate_path(path)?;
+        
+        // Build mount info for virtual filesystem detection
+        let mount_info = if self.skip_virtual_filesystems || self.stay_on_filesystem {
+            Some(MountInfo::new(path)?)
+        } else {
+            None
+        };
         
         let mut walker = WalkDir::new(path).follow_links(self.follow_symlinks);
         
@@ -141,7 +188,7 @@ impl DirectoryScanner {
                 }
                 e.file_type().is_file()
             })
-            .filter(|e| self.should_include_entry(e.path()))
+            .filter(|e| self.should_include_entry(e.path(), &mount_info))
             .collect();
         
         // Check cancellation after collection
@@ -250,11 +297,18 @@ impl DirectoryScanner {
     ) -> Result<TreeNode, ScanError> {
         validate_path(path)?;
         
+        // Build mount info for virtual filesystem detection
+        let mount_info = if self.skip_virtual_filesystems || self.stay_on_filesystem {
+            Some(MountInfo::new(path)?)
+        } else {
+            None
+        };
+        
         if let Some(ref callback) = progress_callback {
             callback(0.0, format!("Scanning: {}", path.display()));
         }
         
-        let result = self.build_tree_node(path, 0, &progress_callback);
+        let result = self.build_tree_node(path, 0, &progress_callback, &mount_info);
         
         if let Some(ref callback) = progress_callback {
             callback(1.0, "Tree scan completed".to_string());
@@ -275,6 +329,13 @@ impl DirectoryScanner {
         progress_callback: Option<ProgressCallback>
     ) -> Result<DirectoryStats, ScanError> {
         validate_path(path)?;
+        
+        // Build mount info for virtual filesystem detection
+        let mount_info = if self.skip_virtual_filesystems || self.stay_on_filesystem {
+            Some(MountInfo::new(path)?)
+        } else {
+            None
+        };
         
         let mut stats = DirectoryStats::default();
         let mut walker = WalkDir::new(path).follow_links(self.follow_symlinks);
@@ -299,7 +360,7 @@ impl DirectoryScanner {
                 callback(progress, format!("Analyzing: {}", entry.path().display()));
             }
             
-            if !self.should_include_entry(entry.path()) {
+            if !self.should_include_entry(entry.path(), &mount_info) {
                 continue;
             }
             
@@ -328,7 +389,8 @@ impl DirectoryScanner {
     }
     
     /// Check if a file/directory should be included based on scanner settings
-    fn should_include_entry(&self, path: &Path) -> bool {
+    fn should_include_entry(&self, path: &Path, mount_info: &Option<MountInfo>) -> bool {
+        // Check dotfiles filter
         if !self.include_dotfiles {
             // Check all components in the path for dotfiles/directories (starting with '.')
             for component in path.components() {
@@ -339,6 +401,14 @@ impl DirectoryScanner {
                 }
             }
         }
+        
+        // Check virtual filesystem and mount boundary filters
+        if let Some(ref info) = mount_info {
+            if !info.should_include_path(path, self.skip_virtual_filesystems, self.stay_on_filesystem) {
+                return false;
+            }
+        }
+        
         true
     }
     
@@ -347,7 +417,8 @@ impl DirectoryScanner {
         &self, 
         path: &Path, 
         current_depth: usize,
-        progress_callback: &Option<ProgressCallback>
+        progress_callback: &Option<ProgressCallback>,
+        mount_info: &Option<MountInfo>,
     ) -> Result<TreeNode, ScanError> {
         // Check cancellation at the start of each node
         if let Some(ref flag) = self.cancellation_flag {
@@ -382,7 +453,7 @@ impl DirectoryScanner {
                 let entry = entry?;
                 let child_path = entry.path();
                 
-                if self.should_include_entry(&child_path) {
+                if self.should_include_entry(&child_path, mount_info) {
                     child_paths.push(child_path);
                 }
             }
@@ -402,7 +473,7 @@ impl DirectoryScanner {
                     }
                 }
                 
-                match self.build_tree_node(&child_path, current_depth + 1, progress_callback) {
+                match self.build_tree_node(&child_path, current_depth + 1, progress_callback, mount_info) {
                     Ok(child_node) => children.push(child_node),
                     Err(ScanError::Cancelled) => return Err(ScanError::Cancelled),
                     Err(e) => eprintln!("Error building tree for '{}': {}", child_path.display(), e),
@@ -417,6 +488,234 @@ impl DirectoryScanner {
             children,
         })
     }
+}
+
+// ============================================================================
+// Mount information for virtual filesystem detection
+// ============================================================================
+
+/// Information about mount points used for filtering virtual filesystems
+pub struct MountInfo {
+    /// Device ID of the starting path (for stay_on_filesystem)
+    start_device_id: u64,
+    /// Set of mount points that are virtual filesystems
+    virtual_mount_points: HashSet<std::path::PathBuf>,
+    /// Fallback paths to skip (used when mount detection fails)
+    fallback_skip_paths: Vec<&'static str>,
+    /// Paths that were actually encountered and skipped during scanning
+    skipped_paths: std::sync::Mutex<HashSet<std::path::PathBuf>>,
+}
+
+impl Clone for MountInfo {
+    fn clone(&self) -> Self {
+        Self {
+            start_device_id: self.start_device_id,
+            virtual_mount_points: self.virtual_mount_points.clone(),
+            fallback_skip_paths: self.fallback_skip_paths.clone(),
+            skipped_paths: std::sync::Mutex::new(
+                self.skipped_paths.lock().map(|g| g.clone()).unwrap_or_default()
+            ),
+        }
+    }
+}
+
+impl MountInfo {
+    /// Create mount info for a given starting path
+    pub fn new(start_path: &Path) -> Result<Self, ScanError> {
+        let start_device_id = get_device_id(start_path).unwrap_or(0);
+        let virtual_mount_points = detect_virtual_mounts();
+        
+        // Platform-specific fallback paths
+        #[cfg(target_os = "linux")]
+        let fallback_skip_paths = VIRTUAL_PATHS_LINUX.to_vec();
+        
+        #[cfg(target_os = "macos")]
+        let fallback_skip_paths = VIRTUAL_PATHS_MACOS.to_vec();
+        
+        #[cfg(windows)]
+        let fallback_skip_paths = Vec::new();
+        
+        #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+        let fallback_skip_paths = Vec::new();
+        
+        Ok(Self {
+            start_device_id,
+            virtual_mount_points,
+            fallback_skip_paths,
+            skipped_paths: std::sync::Mutex::new(HashSet::new()),
+        })
+    }
+    
+    /// Check if a path should be included based on mount filters
+    /// Records skipped virtual filesystem paths for later reporting
+    pub fn should_include_path(&self, path: &Path, skip_virtual: bool, stay_on_fs: bool) -> bool {
+        // Check stay_on_filesystem
+        if stay_on_fs && self.start_device_id != 0 {
+            if let Some(device_id) = get_device_id(path) {
+                if device_id != self.start_device_id {
+                    return false;
+                }
+            }
+        }
+        
+        // Check virtual filesystem mounts
+        if skip_virtual {
+            // Check if path starts with any virtual mount point
+            for mount_point in &self.virtual_mount_points {
+                if path.starts_with(mount_point) {
+                    // Record this skip (use the mount point, not the full path)
+                    if let Ok(mut skipped) = self.skipped_paths.lock() {
+                        skipped.insert(mount_point.clone());
+                    }
+                    return false;
+                }
+            }
+            
+            // Check fallback paths
+            let path_str = path.to_string_lossy();
+            for skip_path in &self.fallback_skip_paths {
+                if path_str.starts_with(skip_path) {
+                    // Record this skip
+                    if let Ok(mut skipped) = self.skipped_paths.lock() {
+                        skipped.insert(std::path::PathBuf::from(skip_path));
+                    }
+                    return false;
+                }
+            }
+        }
+        
+        true
+    }
+    
+    /// Get the list of virtual filesystem paths that were skipped during scanning
+    pub fn get_skipped_paths(&self) -> Vec<std::path::PathBuf> {
+        if let Ok(skipped) = self.skipped_paths.lock() {
+            let mut paths: Vec<_> = skipped.iter().cloned().collect();
+            paths.sort();
+            paths
+        } else {
+            Vec::new()
+        }
+    }
+    
+    /// Get all virtual mount points that would be skipped when scanning from a given path
+    /// This includes both detected mount points and fallback paths
+    pub fn get_virtual_mounts_under(&self, scan_path: &Path) -> Vec<std::path::PathBuf> {
+        let mut result = Vec::new();
+        
+        // Add detected virtual mount points that are under the scan path
+        for mount_point in &self.virtual_mount_points {
+            if mount_point.starts_with(scan_path) {
+                result.push(mount_point.clone());
+            }
+        }
+        
+        // Add fallback paths that are under the scan path
+        for fallback in &self.fallback_skip_paths {
+            let fallback_path = std::path::PathBuf::from(fallback);
+            if fallback_path.starts_with(scan_path) && !result.contains(&fallback_path) {
+                // Only add if the path exists
+                if fallback_path.exists() {
+                    result.push(fallback_path);
+                }
+            }
+        }
+        
+        result.sort();
+        result
+    }
+}
+
+/// Get the device ID for a path (used for stay_on_filesystem)
+#[cfg(unix)]
+fn get_device_id(path: &Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    fs::metadata(path).ok().map(|m| m.dev())
+}
+
+#[cfg(windows)]
+fn get_device_id(path: &Path) -> Option<u64> {
+    // On Windows, we could use GetVolumeInformationW to get volume serial number
+    // For simplicity, we'll use the drive letter as a pseudo device ID
+    path.to_string_lossy()
+        .chars()
+        .next()
+        .filter(|c| c.is_ascii_alphabetic())
+        .map(|c| c.to_ascii_uppercase() as u64)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn get_device_id(_path: &Path) -> Option<u64> {
+    None
+}
+
+/// Detect virtual filesystem mount points
+#[cfg(target_os = "linux")]
+fn detect_virtual_mounts() -> HashSet<std::path::PathBuf> {
+    let mut virtual_mounts = HashSet::new();
+    
+    // Parse /proc/mounts to find virtual filesystems
+    if let Ok(contents) = fs::read_to_string("/proc/mounts") {
+        for line in contents.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 3 {
+                let mount_point = parts[1];
+                let fs_type = parts[2];
+                
+                // Check if this is a virtual filesystem type
+                if VIRTUAL_FS_TYPES.contains(&fs_type) {
+                    virtual_mounts.insert(std::path::PathBuf::from(mount_point));
+                }
+            }
+        }
+    }
+    
+    virtual_mounts
+}
+
+#[cfg(target_os = "macos")]
+fn detect_virtual_mounts() -> HashSet<std::path::PathBuf> {
+    use std::process::Command;
+    
+    let mut virtual_mounts = HashSet::new();
+    
+    // Use mount command to get filesystem info
+    if let Ok(output) = Command::new("mount").output() {
+        if let Ok(mount_output) = String::from_utf8(output.stdout) {
+            for line in mount_output.lines() {
+                // Parse lines like: devfs on /dev (devfs, local, nobrowse)
+                if let Some(on_pos) = line.find(" on ") {
+                    let after_on = &line[on_pos + 4..];
+                    if let Some(paren_pos) = after_on.find(" (") {
+                        let mount_point = &after_on[..paren_pos];
+                        let fs_info = &after_on[paren_pos + 2..];
+                        
+                        // Check filesystem type (first item in parentheses)
+                        if let Some(fs_type) = fs_info.split(',').next() {
+                            let fs_type = fs_type.trim();
+                            if fs_type == "devfs" || fs_type == "autofs" {
+                                virtual_mounts.insert(std::path::PathBuf::from(mount_point));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    virtual_mounts
+}
+
+#[cfg(windows)]
+fn detect_virtual_mounts() -> HashSet<std::path::PathBuf> {
+    // Windows doesn't have virtual filesystems in the same way as Unix
+    // Return empty set - we rely on other mechanisms on Windows
+    HashSet::new()
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+fn detect_virtual_mounts() -> HashSet<std::path::PathBuf> {
+    HashSet::new()
 }
 
 /// Statistics about a directory scan

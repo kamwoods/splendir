@@ -8,7 +8,7 @@ pub mod tree;
 pub mod filesystem;
 
 // Re-export commonly used types and functions for convenience
-pub use scanner::{DirectoryScanner, DirectoryStats, FileSizeDistribution, validate_path, process_file, calculate_sha256, calculate_md5, format_file_size, ProgressCallback};
+pub use scanner::{DirectoryScanner, DirectoryStats, FileSizeDistribution, MountInfo, validate_path, process_file, calculate_sha256, calculate_md5, format_file_size, ProgressCallback};
 pub use tree::{TreeFormatter, TreeFormatOptions, TreeLine, FileType, get_file_color, filter_tree_by_type, count_files_by_type};
 pub use filesystem::{FilesystemType, VolumeInfo, detect_filesystem};
 
@@ -178,7 +178,28 @@ pub fn analyze_directory(path: &Path, include_dotfiles: bool, max_depth: Option<
         file_type_counts,
         path: path.to_path_buf(),
         volume_info,
+        skipped_virtual_filesystems: Vec::new(),
     })
+}
+
+/// Options for directory analysis
+#[derive(Debug, Clone)]
+pub struct AnalysisOptions {
+    pub include_dotfiles: bool,
+    pub max_depth: Option<usize>,
+    pub skip_virtual_filesystems: bool,
+    pub stay_on_filesystem: bool,
+}
+
+impl Default for AnalysisOptions {
+    fn default() -> Self {
+        Self {
+            include_dotfiles: false,
+            max_depth: Some(50),
+            skip_virtual_filesystems: true,
+            stay_on_filesystem: false,
+        }
+    }
 }
 
 /// Comprehensive directory analysis with progress reporting
@@ -188,9 +209,28 @@ pub fn analyze_directory_with_progress(
     max_depth: Option<usize>,
     progress_callback: ProgressCallback
 ) -> Result<DirectoryAnalysis, ScanError> {
+    // Use default options for virtual filesystem handling
+    let options = AnalysisOptions {
+        include_dotfiles,
+        max_depth,
+        ..Default::default()
+    };
+    analyze_directory_with_options(path, options, progress_callback)
+}
+
+/// Comprehensive directory analysis with full options and progress reporting
+pub fn analyze_directory_with_options(
+    path: &Path, 
+    options: AnalysisOptions,
+    progress_callback: ProgressCallback
+) -> Result<DirectoryAnalysis, ScanError> {
+    use scanner::MountInfo;
+    
     let scanner = DirectoryScanner::new()
-        .include_dotfiles(include_dotfiles)
-        .max_depth(max_depth.unwrap_or(50));
+        .include_dotfiles(options.include_dotfiles)
+        .skip_virtual_filesystems(options.skip_virtual_filesystems)
+        .stay_on_filesystem(options.stay_on_filesystem)
+        .max_depth(options.max_depth.unwrap_or(50));
     
     // For analysis, we'll divide progress into three phases
     let stats_callback = {
@@ -212,6 +252,16 @@ pub fn analyze_directory_with_progress(
     // Detect filesystem (fast, do it first)
     let volume_info = filesystem::detect_filesystem(path);
     
+    // Create mount info to determine which virtual filesystems would be skipped
+    let skipped_virtual_filesystems = if options.skip_virtual_filesystems {
+        MountInfo::new(path)
+            .ok()
+            .map(|info| info.get_virtual_mounts_under(path))
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    
     let stats = scanner.scan_stats_with_progress(path, Some(stats_callback))?;
     let tree = scanner.scan_tree_with_progress(path, Some(tree_callback))?;
     
@@ -226,6 +276,7 @@ pub fn analyze_directory_with_progress(
         file_type_counts,
         path: path.to_path_buf(),
         volume_info,
+        skipped_virtual_filesystems,
     })
 }
 
@@ -237,6 +288,7 @@ pub struct DirectoryAnalysis {
     pub file_type_counts: std::collections::HashMap<FileType, usize>,
     pub path: PathBuf,
     pub volume_info: Option<filesystem::VolumeInfo>,
+    pub skipped_virtual_filesystems: Vec<PathBuf>,
 }
 
 impl DirectoryAnalysis {
@@ -286,6 +338,15 @@ impl DirectoryAnalysis {
             if *file_type != FileType::Directory {
                 summary.push_str(&format!("  {}: {}\n", file_type.description(), count));
             }
+        }
+        
+        // Skipped virtual filesystems (only if non-empty)
+        if !self.skipped_virtual_filesystems.is_empty() {
+            let paths: Vec<String> = self.skipped_virtual_filesystems
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect();
+            summary.push_str(&format!("\nSkipped virtual file systems at: {}\n", paths.join(", ")));
         }
         
         summary

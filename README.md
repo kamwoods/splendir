@@ -7,7 +7,7 @@
 
 ### A High Performance Directory Scanner and Printer
 
-Splendir is an extremely fast cross-platform directory scanner with a GUI interface. Splendir generates tree views of files in a directory, customizable lists of file metadata (including file types, MIME types, and hashes), and reports of directory contents and file type distributions.
+Splendir is a fast cross-platform directory scanner with a GUI interface. Splendir generates tree views of files in a directory, customizable lists of file metadata (including file types, MIME types, and hashes), and reports of directory contents and file type distributions.
 
 Features:
 - Multi-threaded processing for high speed scans and hash calculations
@@ -55,13 +55,30 @@ Download ```splendir-macos-tar.gz``` from the latest release in [Releases](https
 
 ### Using Splendir
 
-Click the **Browse...** button to select a local directory, then click the **Start Scan** button. The **Mode:** dropdown can be set to **Detailed File List** (outputs a file list with metadata), **Tree View** (outputs a graphical tree view similar to the command-line tool "tree"), or **Directory Analysis** (a high-level overview of the directory contents). All three views are generated when **Start Scan** is clicked. When a scan is complete, an **Export** button will appear to allow export of the content. If **Detailed File List** is currently selected, clicking **Export** will generate a CSV file. If **Tree View** is selected, it will generate a UTF-8 text representation of the tree.
+Click the **Browse...** button to select a local directory, then click the **Start Scan** button. The **Mode:** dropdown can be set to:
 
-Splendir will distribute work among all available CPU cores to provide maximum performance when running long scans (for example, computing SHA256 hashes for many files). You can terminate a long-running scan by clicking **Cancel** at any time. The scan will be shut down once the most recent batch of 10 files has completed. Clicking **Exit** during a scan will also trigger a cancellation.
+- **Detailed File List** (outputs a file list with metadata)
+- **Tree View** (outputs a graphical tree view similar to the command-line tool "tree")
+- **Directory Analysis** (a high-level overview of the directory contents). 
+
+All three views are generated when **Start Scan** is clicked. When a scan is complete, an **Export** button will appear to allow export of the content. If **Detailed File List** is currently selected, clicking **Export** will generate a CSV file. If **Tree View** is selected, it will generate a UTF-8 text representation of the tree. If **Directory Analysis** is selected, it will generate a text file containing that overview.
+
+The **Traversal Options** control which types of files should be included in the scan, and (optionally) a maximum directory depth for the scan.
+
+- **Include dotfiles** includes directories and files beginning with a ".", typically signifying a system or configuration file on Linux and macOS.
+- **Follow symlinks** follows symbolic links to access a target file or directory
+- **Skip virtual filesystems** is checked by default, and skips specific locations including ``/proc``, ``/run``, ``/sys``, and ``/tmp`` on Linux if you happen to be scanning a live file system from the ``/`` root directory, or ``devfs`` and ``autofs`` mounts on macOS.
+- **Stay on same filesystem** is unchecked by default, but can be checked to restrict the scan from switching filesystems (for example, in Linux if a directory contains multiple mount locations for different filesystems).
+
+Splendir will distribute work among all available CPU cores to provide maximum performance when running long scans (for example, computing MD5 or SHA hashes for many files). You can terminate a long-running scan by clicking **Cancel** at any time. The scan will be shut down once the most recent batch of 10 files has completed. Clicking **Exit** during a scan will also trigger a cancellation.
 
 ![Splendir Directory Listing View](assets/sds-dirview.png)
 
-Both the **Directory Listing** view and **Tree View** are implemented with a virtual scrolling feature to provide live views of directories of any size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to any point in the output to inspect and review before exporting. You can also adjust the Sort Options to instantly view and export sorted results without having to rescan. The **Default** sort option is an alphabetized directory walk (all subdirectory entries grouped together at each level).
+Both the **Directory Listing** view and **Tree View** are implemented with a virtual scrolling feature to provide live views of directories of any size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to any point in the output to inspect and review before exporting. The **Directory Listing** view collapses all selected columns into the viewable area by default. To see the full output in each column, click **Expand Columns**. The vertical scroll position is maintained when expanding or collapsing columns.
+
+You can also adjust the **Sort Options** to instantly view and export sorted results without having to rescan. The **Default** sort option is an alphabetized directory walk (all subdirectory entries grouped together at each level).
+
+You can check or uncheck the basic metadata (File Name, Path, Path + Name, Size, Created, Modified, Accessed) in **File Options** to add or remove these columns without having to rescan. Checking Format, Media Type, MD5, SHA256, or SHA512 will display the column but the results will not be populated unless these were checked at the time of the scan.
 
 ![Splendir Tree Listing View](assets/sds-treeview.png)
 
@@ -69,7 +86,7 @@ The **Detailed File List** view is exported as a UTF-8 encoded CSV file (this ca
 
 ![Splendir Directory Analysis View](assets/sds-analysis.png)
 
-The **Directory Analysis** view provides some basic information about the total size of the directory scanned and the types and counts of files encountered.
+The **Directory Analysis** view provides some basic information about the total size of the directory scanned and the types and counts of files encountered. This view also indicates the filesystem type for the base directory associated with the scan, and provides a simple distribution of the file sizes encountered.
 
 ### Build (Developers and Contributors)
 
