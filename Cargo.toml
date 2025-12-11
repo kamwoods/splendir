@@ -1,6 +1,6 @@
 [package]
 name = "splendir"
-version = "0.1.0-alpha.19"
+version = "0.1.0-alpha.20"
 edition = "2021"
 authors = ["Kam Woods"]
 description = "A directory scanner with a GUI interface"
@@ -26,7 +26,7 @@ file-format = { version = "0.28", features = ["reader"] }
 mime_guess = "2.0"
 
 # GUI dependencies
-iced = { version = "0.13", features = ["tokio"], optional = true }
+iced = { version = "0.14", features = ["tokio", "advanced"], optional = true }
 rfd = { version = "0.15", optional = true }
 
 # Async runtime for GUI
