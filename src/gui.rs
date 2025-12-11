@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use directory_scanner::{
-    analyze_directory_with_progress, format_tree_output, scan_directory_tree_with_progress,
-    DirectoryScanner, FileInfo, ProgressCallback, TreeNode,
+    analyze_directory_with_options, format_tree_output, scan_directory_tree_with_progress,
+    AnalysisOptions, DirectoryScanner, FileInfo, ProgressCallback, TreeNode,
 };
 
 /// Version string read from Cargo.toml at compile time
@@ -23,7 +23,7 @@ const APP_TITLE: &str = concat!("Splendir v", env!("CARGO_PKG_VERSION"));
 pub fn run() -> iced::Result {
     iced::application(APP_TITLE, update, view)
         .window(window::Settings {
-            size: iced::Size::new(1150.0, 770.0),
+            size: iced::Size::new(1240.0, 825.0),
             min_size: Some(iced::Size::new(900.0, 700.0)),
             ..Default::default()
         })
@@ -122,7 +122,7 @@ impl std::fmt::Display for SortBy {
             SortBy::Modified => write!(f, "Modified"),
             SortBy::Accessed => write!(f, "Accessed"),
             SortBy::Format => write!(f, "Format"),
-            SortBy::MimeType => write!(f, "MIME Type"),
+            SortBy::MimeType => write!(f, "Media Type"),
         }
     }
 }
@@ -168,6 +168,8 @@ struct SplendirGui {
     scan_preset: ScanPreset,
     include_dotfiles: bool,
     follow_symlinks: bool,
+    skip_virtual_filesystems: bool,
+    stay_on_filesystem: bool,
     calculate_md5: bool,
     calculate_sha256: bool,
     calculate_sha512: bool,
@@ -242,6 +244,8 @@ impl Default for SplendirGui {
             scan_preset: ScanPreset::default(),
             include_dotfiles: false,
             follow_symlinks: false,
+            skip_virtual_filesystems: true,  // Safe default
+            stay_on_filesystem: false,
             calculate_md5: false,
             calculate_sha256: false,
             calculate_sha512: false,
@@ -301,6 +305,8 @@ enum Message {
     PresetSelected(ScanPreset),
     IncludeDotfilesToggled(bool),
     FollowSymlinksToggled(bool),
+    SkipVirtualFilesystemsToggled(bool),
+    StayOnFilesystemToggled(bool),
     CalculateSHA256Toggled(bool),
     CalculateSHA512Toggled(bool),
     CalculateMD5Toggled(bool),
@@ -508,6 +514,12 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::FollowSymlinksToggled(value) => {
             state.follow_symlinks = value;
+        }
+        Message::SkipVirtualFilesystemsToggled(value) => {
+            state.skip_virtual_filesystems = value;
+        }
+        Message::StayOnFilesystemToggled(value) => {
+            state.stay_on_filesystem = value;
         }
         Message::CalculateMD5Toggled(value) => {
             state.calculate_md5 = value;
@@ -856,6 +868,8 @@ fn create_scanner(state: &SplendirGui) -> DirectoryScanner {
     let mut scanner = DirectoryScanner::new()
         .include_dotfiles(state.include_dotfiles)
         .follow_symlinks(state.follow_symlinks)
+        .skip_virtual_filesystems(state.skip_virtual_filesystems)
+        .stay_on_filesystem(state.stay_on_filesystem)
         .calculate_sha256(state.calculate_sha256)
         .calculate_sha512(state.calculate_sha512)
         .calculate_md5(state.calculate_md5)
@@ -923,11 +937,13 @@ fn view_options(state: &SplendirGui) -> Element<'_, Message> {
         column![
             checkbox("Include dotfiles", state.include_dotfiles).on_toggle(Message::IncludeDotfilesToggled),
             checkbox("Follow symlinks", state.follow_symlinks).on_toggle(Message::FollowSymlinksToggled),
-            row![text("Max Depth:").width(80), text_input("", &state.max_depth)
+            checkbox("Skip virtual filesystems", state.skip_virtual_filesystems).on_toggle(Message::SkipVirtualFilesystemsToggled),
+            checkbox("Stay on same filesystem", state.stay_on_filesystem).on_toggle(Message::StayOnFilesystemToggled),
+            row![text("Max depth:"), text_input("", &state.max_depth)
                 .on_input(Message::MaxDepthChanged)
-                .width(Length::Fixed(100.0))
+                .width(Length::Fixed(75.0))
                 .padding(8)
-            ].spacing(10),
+            ].spacing(10).align_y(Alignment::Center),
         ].spacing(8)
     ]
     .spacing(10);
@@ -945,7 +961,7 @@ fn view_options(state: &SplendirGui) -> Element<'_, Message> {
     
     let file_options_col2 = column![
         checkbox("Format", state.show_format).on_toggle(Message::ShowFormatToggled),
-        checkbox("MIME Type", state.calculate_mime).on_toggle(Message::CalculateMimeToggled),
+        checkbox("Media Type", state.calculate_mime).on_toggle(Message::CalculateMimeToggled),
         checkbox("MD5", state.calculate_md5).on_toggle(Message::CalculateMD5Toggled),
         checkbox("SHA256", state.calculate_sha256).on_toggle(Message::CalculateSHA256Toggled),
         checkbox("SHA512", state.calculate_sha512).on_toggle(Message::CalculateSHA512Toggled),
@@ -1142,7 +1158,7 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         header_row = header_row.push(text("Format").width(standard_width).size(15));
     }
     if state.calculate_mime {
-        header_row = header_row.push(text("MIME Type").width(standard_width).size(15));
+        header_row = header_row.push(text("Media Type").width(standard_width).size(15));
     }
     if state.calculate_md5 {
         header_row = header_row.push(text("MD5").width(standard_width).size(15));
@@ -1652,7 +1668,14 @@ async fn perform_scan_with_progress(
                 }
             });
             
-            match analyze_directory_with_progress(&path, scanner.include_dotfiles, scanner.max_depth, progress_callback) {
+            let analysis_options = AnalysisOptions {
+                include_dotfiles: scanner.include_dotfiles,
+                max_depth: scanner.max_depth,
+                skip_virtual_filesystems: scanner.skip_virtual_filesystems,
+                stay_on_filesystem: scanner.stay_on_filesystem,
+            };
+            
+            match analyze_directory_with_options(&path, analysis_options, progress_callback) {
                 Ok(analysis) => {
                     results.analysis_output = analysis.summary();
                 }
@@ -1718,7 +1741,7 @@ async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode, col
                 if columns.show_modified { headers.push("Modified"); }
                 if columns.show_accessed { headers.push("Accessed"); }
                 if columns.show_format { headers.push("Format"); }
-                if columns.calculate_mime { headers.push("MIME Type"); }
+                if columns.calculate_mime { headers.push("Media Type"); }
                 if columns.calculate_md5 { headers.push("MD5"); }
                 if columns.calculate_sha256 { headers.push("SHA256"); }
                 if columns.calculate_sha512 { headers.push("SHA512"); }
