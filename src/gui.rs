@@ -1,7 +1,10 @@
 use iced::{
-    widget::{button, checkbox, column, container, horizontal_space, pick_list, progress_bar, radio, row, scrollable, stack, text, text_input, Column, Space},
+    widget::{button, checkbox, column, container, pick_list, progress_bar, row, scrollable, text, text_input, rule, Column, Space, Id},
+    widget::text::Wrapping,
     Alignment, Element, Length, Theme, Task, Font, time,
 };
+use iced::widget::scrollable::AbsoluteOffset;
+use iced::widget::operation::scroll_to;
 use iced::window;
 use rfd::FileDialog;
 use std::path::PathBuf;
@@ -10,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use directory_scanner::{
-    analyze_directory_with_options, format_tree_output, scan_directory_tree_with_progress,
+    analyze_directory_with_options, format_tree_output,
     AnalysisOptions, DirectoryScanner, FileInfo, ProgressCallback, TreeNode,
 };
 
@@ -21,15 +24,20 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const APP_TITLE: &str = concat!("Splendir v", env!("CARGO_PKG_VERSION"));
 
 pub fn run() -> iced::Result {
-    iced::application(APP_TITLE, update, view)
+    iced::application(SplendirGui::default, update, view)
+        .title(APP_TITLE)
         .window(window::Settings {
             size: iced::Size::new(1240.0, 825.0),
             min_size: Some(iced::Size::new(900.0, 700.0)),
             ..Default::default()
         })
-        .theme(|_| Theme::Dark)
+        .theme(theme)
         .subscription(subscription)
         .run()
+}
+
+fn theme(_state: &SplendirGui) -> Theme {
+    Theme::Dark
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -743,9 +751,9 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             // snap_to with RelativeOffset (0.0-1.0 percentage) because we track
             // the actual pixel offset in detail_scroll_offset
             let offset = state.detail_scroll_offset;
-            return scrollable::scroll_to(
-                scrollable::Id::new("detailed_results_scroll"),
-                scrollable::AbsoluteOffset { x: 0.0, y: offset }
+            return scroll_to(
+                Id::new("detailed_results_scroll"),
+                AbsoluteOffset { x: 0.0, y: offset }
             );
         }
         Message::TreeScrolled(offset) => {
@@ -765,7 +773,7 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
             if let Some(ref flag) = state.cancellation_flag {
                 flag.store(true, Ordering::Relaxed);
             }
-            return window::get_latest().and_then(window::close);
+            return iced::exit();
         }
     }
     
@@ -780,7 +788,7 @@ fn view(state: &SplendirGui) -> Element<'_, Message> {
     // Options sidebar and main content area side by side
     let main_row = row![
         container(options).padding(20),
-        iced::widget::vertical_rule(1),
+        rule::vertical(1),
         container(
             if state.is_scanning {
                 container(view_progress(state)).padding(20)
@@ -815,15 +823,15 @@ fn view(state: &SplendirGui) -> Element<'_, Message> {
         text(message_text)
             .size(12)
             .color(iced::Color::from_rgb(0.7, 0.7, 0.7)),
-        horizontal_space(),
+        Space::new().width(Length::Fill),
         text(format!("Splendir v{}", VERSION))
             .size(12)
             .color(iced::Color::from_rgb(0.5, 0.5, 0.5)),
-        Space::with_width(Length::Fixed(20.0)),
+        Space::new().width(Length::Fixed(20.0)),
         button(text("About").size(14))
             .on_press(Message::ShowAbout)
             .padding([5, 10]),
-        Space::with_width(Length::Fixed(10.0)),
+        Space::new().width(Length::Fixed(10.0)),
         button(text("Exit").size(14))
             .on_press(Message::Exit)
             .padding([5, 10]),
@@ -935,10 +943,10 @@ fn view_options(state: &SplendirGui) -> Element<'_, Message> {
     let traversal_section = column![
         text("Traversal Options").size(16).font(Font { weight: iced::font::Weight::Bold, ..Font::default() }).color(iced::Color::from_rgb(0.9, 0.9, 0.9)),
         column![
-            checkbox("Include dotfiles", state.include_dotfiles).on_toggle(Message::IncludeDotfilesToggled),
-            checkbox("Follow symlinks", state.follow_symlinks).on_toggle(Message::FollowSymlinksToggled),
-            checkbox("Skip virtual filesystems", state.skip_virtual_filesystems).on_toggle(Message::SkipVirtualFilesystemsToggled),
-            checkbox("Stay on same filesystem", state.stay_on_filesystem).on_toggle(Message::StayOnFilesystemToggled),
+            checkbox(state.include_dotfiles).label("Include dotfiles").on_toggle(Message::IncludeDotfilesToggled),
+            checkbox(state.follow_symlinks).label("Follow symlinks").on_toggle(Message::FollowSymlinksToggled),
+            checkbox(state.skip_virtual_filesystems).label("Skip virtual filesystems").on_toggle(Message::SkipVirtualFilesystemsToggled),
+            checkbox(state.stay_on_filesystem).label("Stay on same filesystem").on_toggle(Message::StayOnFilesystemToggled),
             row![text("Max depth:"), text_input("", &state.max_depth)
                 .on_input(Message::MaxDepthChanged)
                 .width(Length::Fixed(75.0))
@@ -950,21 +958,21 @@ fn view_options(state: &SplendirGui) -> Element<'_, Message> {
     
     // File Options section - two column layout
     let file_options_col1 = column![
-        checkbox("File Name", state.show_filename).on_toggle(Message::ShowFilenameToggled),
-        checkbox("Path", state.show_path).on_toggle(Message::ShowPathToggled),
-        checkbox("Path + Name", state.show_path_name).on_toggle(Message::ShowPathNameToggled),
-        checkbox("Size", state.show_size).on_toggle(Message::ShowSizeToggled),
-        checkbox("Created", state.show_created).on_toggle(Message::ShowCreatedToggled),
-        checkbox("Modified", state.show_modified).on_toggle(Message::ShowModifiedToggled),
-        checkbox("Accessed", state.show_accessed).on_toggle(Message::ShowAccessedToggled),
+        checkbox(state.show_filename).label("File Name").on_toggle(Message::ShowFilenameToggled),
+        checkbox(state.show_path).label("Path").on_toggle(Message::ShowPathToggled),
+        checkbox(state.show_path_name).label("Path + Name").on_toggle(Message::ShowPathNameToggled),
+        checkbox(state.show_size).label("Size").on_toggle(Message::ShowSizeToggled),
+        checkbox(state.show_created).label("Created").on_toggle(Message::ShowCreatedToggled),
+        checkbox(state.show_modified).label("Modified").on_toggle(Message::ShowModifiedToggled),
+        checkbox(state.show_accessed).label("Accessed").on_toggle(Message::ShowAccessedToggled),
     ].spacing(8);
     
     let file_options_col2 = column![
-        checkbox("Format", state.show_format).on_toggle(Message::ShowFormatToggled),
-        checkbox("Media Type", state.calculate_mime).on_toggle(Message::CalculateMimeToggled),
-        checkbox("MD5", state.calculate_md5).on_toggle(Message::CalculateMD5Toggled),
-        checkbox("SHA256", state.calculate_sha256).on_toggle(Message::CalculateSHA256Toggled),
-        checkbox("SHA512", state.calculate_sha512).on_toggle(Message::CalculateSHA512Toggled),
+        checkbox(state.show_format).label("Format").on_toggle(Message::ShowFormatToggled),
+        checkbox(state.calculate_mime).label("Media Type").on_toggle(Message::CalculateMimeToggled),
+        checkbox(state.calculate_md5).label("MD5").on_toggle(Message::CalculateMD5Toggled),
+        checkbox(state.calculate_sha256).label("SHA256").on_toggle(Message::CalculateSHA256Toggled),
+        checkbox(state.calculate_sha512).label("SHA512").on_toggle(Message::CalculateSHA512Toggled),
     ].spacing(8);
     
     let file_options_section = column![
@@ -1007,11 +1015,11 @@ fn view_options(state: &SplendirGui) -> Element<'_, Message> {
     scrollable(
         column![
             settings_section,
-            iced::widget::horizontal_rule(1),
+            rule::horizontal(1),
             traversal_section,
-            iced::widget::horizontal_rule(1),
+            rule::horizontal(1),
             file_options_section,
-            iced::widget::horizontal_rule(1),
+            rule::horizontal(1),
             sort_options_section,
         ]
         .spacing(10)
@@ -1043,7 +1051,7 @@ fn view_results(state: &SplendirGui) -> Element<'_, Message> {
     
     let mut status_row = row![
         text(&state.scan_status).size(14),
-        horizontal_space(),
+        Space::new().width(Length::Fill),
     ]
     .spacing(10)
     .align_y(Alignment::Center);
@@ -1094,7 +1102,7 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     let file_count_text = text(format!("Total files: {}", total_files)).size(14);
     
     // Calculate actual widths based on content when expanded
-    let (filename_width, path_width, fullpath_width, standard_width, size_width) = if state.columns_expanded {
+    let (filename_width, path_width, fullpath_width, standard_width, size_width, md5_width, sha256_width, sha512_width) = if state.columns_expanded {
         let max_filename_len = state.scan_results.detailed_files.iter()
             .map(|f| f.name.chars().count())
             .max()
@@ -1119,7 +1127,12 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         let std_width = Length::Fixed(200.0);
         let sz_width = Length::Fixed(100.0);
         
-        (fn_width, p_width, fp_width, std_width, sz_width)
+        // Hash widths: MD5=32 chars, SHA256=64 chars, SHA512=128 chars
+        let md5_w = Length::Fixed(32.0 * char_width + padding);
+        let sha256_w = Length::Fixed(64.0 * char_width + padding);
+        let sha512_w = Length::Fixed(128.0 * char_width + padding);
+        
+        (fn_width, p_width, fp_width, std_width, sz_width, md5_w, sha256_w, sha512_w)
     } else {
         (
             Length::FillPortion(2),
@@ -1127,6 +1140,9 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
             Length::FillPortion(3),
             Length::FillPortion(2),
             Length::FillPortion(1),
+            Length::FillPortion(2),  // md5_width (collapsed)
+            Length::FillPortion(2),  // sha256_width (collapsed)
+            Length::FillPortion(2),  // sha512_width (collapsed)
         )
     };
     
@@ -1134,40 +1150,76 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     let mut header_row = row![].spacing(10).padding([0, 10]).height(Length::Fixed(30.0)).align_y(Alignment::Center);
     
     if state.show_filename {
-        header_row = header_row.push(text("File").width(filename_width).size(15));
+        header_row = header_row.push(
+            container(text("File").size(15).wrapping(Wrapping::None))
+                .width(filename_width).clip(true)
+        );
     }
     if state.show_path {
-        header_row = header_row.push(text("Path").width(path_width).size(15));
+        header_row = header_row.push(
+            container(text("Path").size(15).wrapping(Wrapping::None))
+                .width(path_width).clip(true)
+        );
     }
     if state.show_path_name {
-        header_row = header_row.push(text("Path + Name").width(fullpath_width).size(15));
+        header_row = header_row.push(
+            container(text("Path + Name").size(15).wrapping(Wrapping::None))
+                .width(fullpath_width).clip(true)
+        );
     }
     if state.show_size {
-        header_row = header_row.push(text("Size").width(size_width).size(15));
+        header_row = header_row.push(
+            container(text("Size").size(15).wrapping(Wrapping::None))
+                .width(size_width).clip(true)
+        );
     }
     if state.show_created {
-        header_row = header_row.push(text("Created").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("Created").size(15).wrapping(Wrapping::None))
+                .width(standard_width).clip(true)
+        );
     }
     if state.show_modified {
-        header_row = header_row.push(text("Modified").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("Modified").size(15).wrapping(Wrapping::None))
+                .width(standard_width).clip(true)
+        );
     }
     if state.show_accessed {
-        header_row = header_row.push(text("Accessed").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("Accessed").size(15).wrapping(Wrapping::None))
+                .width(standard_width).clip(true)
+        );
     }
     if state.show_format {
-        header_row = header_row.push(text("Format").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("Format").size(15).wrapping(Wrapping::None))
+                .width(standard_width).clip(true)
+        );
     }
     if state.calculate_mime {
-        header_row = header_row.push(text("Media Type").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("Media Type").size(15).wrapping(Wrapping::None))
+                .width(standard_width).clip(true)
+        );
     }
     if state.calculate_md5 {
-        header_row = header_row.push(text("MD5").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("MD5").size(15).wrapping(Wrapping::None))
+                .width(md5_width).clip(true)
+        );
     }
     if state.calculate_sha256 {
-        header_row = header_row.push(text("SHA256").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("SHA256").size(15).wrapping(Wrapping::None))
+                .width(sha256_width).clip(true)
+        );
     }
     if state.calculate_sha512 {
-        header_row = header_row.push(text("SHA512").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("SHA512").size(15).wrapping(Wrapping::None))
+                .width(sha512_width).clip(true)
+        );
     }
     
     // Calculate visible range for virtual scrolling
@@ -1187,9 +1239,9 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         if state.show_accessed { if let Length::Fixed(w) = standard_width { width += w; } }
         if state.show_format { if let Length::Fixed(w) = standard_width { width += w; } }
         if state.calculate_mime { if let Length::Fixed(w) = standard_width { width += w; } }
-        if state.calculate_md5 { if let Length::Fixed(w) = standard_width { width += w; } }
-        if state.calculate_sha256 { if let Length::Fixed(w) = standard_width { width += w; } }
-        if state.calculate_sha512 { if let Length::Fixed(w) = standard_width { width += w; } }
+        if state.calculate_md5 { if let Length::Fixed(w) = md5_width { width += w; } }
+        if state.calculate_sha256 { if let Length::Fixed(w) = sha256_width { width += w; } }
+        if state.calculate_sha512 { if let Length::Fixed(w) = sha512_width { width += w; } }
         
         // Add spacing between columns (10px per gap)
         let visible_columns = [
@@ -1217,7 +1269,7 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         
         // Add spacer for items above viewport
         if start_index > 0 {
-            viewport = viewport.push(Space::new(Length::Fill, start_index as f32 * ROW_HEIGHT));
+            viewport = viewport.push(Space::new().width(Length::Fill).height(start_index as f32 * ROW_HEIGHT));
         }
         
         // Add visible rows
@@ -1226,61 +1278,76 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                 let mut data_row = row![].spacing(10).padding([0, 10]).height(ROW_HEIGHT).align_y(Alignment::Center);
                 
                 if state.show_filename {
-                    data_row = data_row.push(text(&file.name).width(filename_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.name).size(14).wrapping(Wrapping::None))
+                            .width(filename_width).clip(true)
+                    );
                 }
                 if state.show_path {
-                    data_row = data_row.push(text(&file.directory_path).width(path_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.directory_path).size(14).wrapping(Wrapping::None))
+                            .width(path_width).clip(true)
+                    );
                 }
                 if state.show_path_name {
-                    data_row = data_row.push(text(&file.full_path).width(fullpath_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.full_path).size(14).wrapping(Wrapping::None))
+                            .width(fullpath_width).clip(true)
+                    );
                 }
                 if state.show_size {
-                    data_row = data_row.push(text(format_size(file.size)).width(size_width).size(14));
+                    data_row = data_row.push(
+                        container(text(format_size(file.size)).size(14).wrapping(Wrapping::None))
+                            .width(size_width).clip(true)
+                    );
                 }
                 if state.show_created {
-                    data_row = data_row.push(text(&file.created).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.created).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_modified {
-                    data_row = data_row.push(text(&file.last_modified).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.last_modified).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_accessed {
-                    data_row = data_row.push(text(&file.last_accessed).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.last_accessed).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_format {
-                    data_row = data_row.push(text(&file.format).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.format).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.calculate_mime {
-                    data_row = data_row.push(text(&file.mime_type).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.mime_type).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.calculate_md5 {
-                    let md5_text = if state.columns_expanded {
-                        file.md5.clone()
-                    } else if file.md5.len() > 12 {
-                        format!("{}...", &file.md5[..12])
-                    } else {
-                        file.md5.clone()
-                    };
-                    data_row = data_row.push(text(md5_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.md5).size(14).wrapping(Wrapping::None))
+                            .width(md5_width).clip(true)
+                    );
                 }
                 if state.calculate_sha256 {
-                    let sha256_text = if state.columns_expanded {
-                        file.sha256.clone()
-                    } else if file.sha256.len() > 12 {
-                        format!("{}...", &file.sha256[..12])
-                    } else {
-                        file.sha256.clone()
-                    };
-                    data_row = data_row.push(text(sha256_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.sha256).size(14).wrapping(Wrapping::None))
+                            .width(sha256_width).clip(true)
+                    );
                 }
                 if state.calculate_sha512 {
-                    let sha512_text = if state.columns_expanded {
-                        file.sha512.clone()
-                    } else if file.sha512.len() > 12 {
-                        format!("{}...", &file.sha512[..12])
-                    } else {
-                        file.sha512.clone()
-                    };
-                    data_row = data_row.push(text(sha512_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.sha512).size(14).wrapping(Wrapping::None))
+                            .width(sha512_width).clip(true)
+                    );
                 }
                 
                 viewport = viewport.push(data_row);
@@ -1290,11 +1357,11 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         // Add spacer for items below viewport
         let remaining_items = total_files.saturating_sub(end_index);
         if remaining_items > 0 {
-            viewport = viewport.push(Space::new(Length::Fill, remaining_items as f32 * ROW_HEIGHT));
+            viewport = viewport.push(Space::new().width(Length::Fill).height(remaining_items as f32 * ROW_HEIGHT));
         }
         
         scrollable(viewport)
-            .id(scrollable::Id::new("detailed_results_scroll"))
+            .id(Id::new("detailed_results_scroll"))
             .height(Length::Fill)
             .direction(scrollable::Direction::Both {
                 vertical: scrollable::Scrollbar::default(),
@@ -1310,7 +1377,7 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         
         // Add spacer for items above viewport
         if start_index > 0 {
-            body_rows = body_rows.push(Space::new(Length::Fill, start_index as f32 * ROW_HEIGHT));
+            body_rows = body_rows.push(Space::new().width(Length::Fill).height(start_index as f32 * ROW_HEIGHT));
         }
         
         // Add visible rows
@@ -1319,31 +1386,58 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                 let mut data_row = row![].spacing(10).padding([0, 10]).height(ROW_HEIGHT).align_y(Alignment::Center);
                 
                 if state.show_filename {
-                    data_row = data_row.push(text(&file.name).width(filename_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.name).size(14).wrapping(Wrapping::None))
+                            .width(filename_width).clip(true)
+                    );
                 }
                 if state.show_path {
-                    data_row = data_row.push(text(&file.directory_path).width(path_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.directory_path).size(14).wrapping(Wrapping::None))
+                            .width(path_width).clip(true)
+                    );
                 }
                 if state.show_path_name {
-                    data_row = data_row.push(text(&file.full_path).width(fullpath_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.full_path).size(14).wrapping(Wrapping::None))
+                            .width(fullpath_width).clip(true)
+                    );
                 }
                 if state.show_size {
-                    data_row = data_row.push(text(format_size(file.size)).width(size_width).size(14));
+                    data_row = data_row.push(
+                        container(text(format_size(file.size)).size(14).wrapping(Wrapping::None))
+                            .width(size_width).clip(true)
+                    );
                 }
                 if state.show_created {
-                    data_row = data_row.push(text(&file.created).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.created).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_modified {
-                    data_row = data_row.push(text(&file.last_modified).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.last_modified).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_accessed {
-                    data_row = data_row.push(text(&file.last_accessed).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.last_accessed).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_format {
-                    data_row = data_row.push(text(&file.format).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.format).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.calculate_mime {
-                    data_row = data_row.push(text(&file.mime_type).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.mime_type).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.calculate_md5 {
                     let md5_text = if file.md5.len() > 12 {
@@ -1351,7 +1445,10 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                     } else {
                         file.md5.clone()
                     };
-                    data_row = data_row.push(text(md5_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(md5_text).size(14).wrapping(Wrapping::None))
+                            .width(md5_width).clip(true)
+                    );
                 }
                 if state.calculate_sha256 {
                     let sha256_text = if file.sha256.len() > 12 {
@@ -1359,7 +1456,10 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                     } else {
                         file.sha256.clone()
                     };
-                    data_row = data_row.push(text(sha256_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(sha256_text).size(14).wrapping(Wrapping::None))
+                            .width(sha256_width).clip(true)
+                    );
                 }
                 if state.calculate_sha512 {
                     let sha512_text = if file.sha512.len() > 12 {
@@ -1367,7 +1467,10 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                     } else {
                         file.sha512.clone()
                     };
-                    data_row = data_row.push(text(sha512_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(sha512_text).size(14).wrapping(Wrapping::None))
+                            .width(sha512_width).clip(true)
+                    );
                 }
                 
                 body_rows = body_rows.push(data_row);
@@ -1377,12 +1480,12 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         // Add spacer for items below viewport
         let remaining_items = total_files.saturating_sub(end_index);
         if remaining_items > 0 {
-            body_rows = body_rows.push(Space::new(Length::Fill, remaining_items as f32 * ROW_HEIGHT));
+            body_rows = body_rows.push(Space::new().width(Length::Fill).height(remaining_items as f32 * ROW_HEIGHT));
         }
         
         // Vertical scrollable for body with same ID as expanded mode
         let vertical_scrollable = scrollable(body_rows)
-            .id(scrollable::Id::new("detailed_results_scroll"))
+            .id(Id::new("detailed_results_scroll"))
             .height(Length::Fill)
             .on_scroll(|viewport| {
                 Message::DetailScrolled(viewport.absolute_offset().y)
@@ -1433,7 +1536,7 @@ fn view_tree_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     
     // Add spacer for items above viewport
     if start_index > 0 {
-        viewport = viewport.push(Space::new(Length::Fill, start_index as f32 * ROW_HEIGHT));
+        viewport = viewport.push(Space::new().width(Length::Fill).height(start_index as f32 * ROW_HEIGHT));
     }
     
     // Add visible nodes
@@ -1464,7 +1567,7 @@ fn view_tree_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     // Add spacer for items below viewport
     let remaining_items = total_nodes.saturating_sub(end_index);
     if remaining_items > 0 {
-        viewport = viewport.push(Space::new(Length::Fill, remaining_items as f32 * ROW_HEIGHT));
+        viewport = viewport.push(Space::new().width(Length::Fill).height(remaining_items as f32 * ROW_HEIGHT));
     }
     
     column![
@@ -1520,14 +1623,14 @@ fn view_about_dialog() -> Element<'static, Message> {
                 text("About Splendir")
                     .size(24)
                     .color(iced::Color::WHITE),
-                Space::with_height(Length::Fixed(20.0)),
+                Space::new().height(Length::Fixed(20.0)),
                 scrollable(
                     text(about_text)
                         .size(14)
                         .color(iced::Color::from_rgb(0.9, 0.9, 0.9))
                 )
                 .height(Length::Fixed(400.0)),
-                Space::with_height(Length::Fixed(20.0)),
+                Space::new().height(Length::Fixed(20.0)),
                 button(text("Close").size(14))
                     .on_press(Message::CloseAbout)
                     .padding([8, 16]),
