@@ -1,5 +1,6 @@
 use iced::{
     widget::{button, checkbox, column, container, pick_list, progress_bar, row, scrollable, text, text_input, rule, Column, Space, Id},
+    widget::text::Wrapping,
     Alignment, Element, Length, Theme, Task, Font, time,
 };
 use iced::widget::scrollable::AbsoluteOffset;
@@ -1101,7 +1102,7 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     let file_count_text = text(format!("Total files: {}", total_files)).size(14);
     
     // Calculate actual widths based on content when expanded
-    let (filename_width, path_width, fullpath_width, standard_width, size_width) = if state.columns_expanded {
+    let (filename_width, path_width, fullpath_width, standard_width, size_width, md5_width, sha256_width, sha512_width) = if state.columns_expanded {
         let max_filename_len = state.scan_results.detailed_files.iter()
             .map(|f| f.name.chars().count())
             .max()
@@ -1126,7 +1127,12 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         let std_width = Length::Fixed(200.0);
         let sz_width = Length::Fixed(100.0);
         
-        (fn_width, p_width, fp_width, std_width, sz_width)
+        // Hash widths: MD5=32 chars, SHA256=64 chars, SHA512=128 chars
+        let md5_w = Length::Fixed(32.0 * char_width + padding);
+        let sha256_w = Length::Fixed(64.0 * char_width + padding);
+        let sha512_w = Length::Fixed(128.0 * char_width + padding);
+        
+        (fn_width, p_width, fp_width, std_width, sz_width, md5_w, sha256_w, sha512_w)
     } else {
         (
             Length::FillPortion(2),
@@ -1134,6 +1140,9 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
             Length::FillPortion(3),
             Length::FillPortion(2),
             Length::FillPortion(1),
+            Length::FillPortion(2),  // md5_width (collapsed)
+            Length::FillPortion(2),  // sha256_width (collapsed)
+            Length::FillPortion(2),  // sha512_width (collapsed)
         )
     };
     
@@ -1141,40 +1150,76 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     let mut header_row = row![].spacing(10).padding([0, 10]).height(Length::Fixed(30.0)).align_y(Alignment::Center);
     
     if state.show_filename {
-        header_row = header_row.push(text("File").width(filename_width).size(15));
+        header_row = header_row.push(
+            container(text("File").size(15).wrapping(Wrapping::None))
+                .width(filename_width).clip(true)
+        );
     }
     if state.show_path {
-        header_row = header_row.push(text("Path").width(path_width).size(15));
+        header_row = header_row.push(
+            container(text("Path").size(15).wrapping(Wrapping::None))
+                .width(path_width).clip(true)
+        );
     }
     if state.show_path_name {
-        header_row = header_row.push(text("Path + Name").width(fullpath_width).size(15));
+        header_row = header_row.push(
+            container(text("Path + Name").size(15).wrapping(Wrapping::None))
+                .width(fullpath_width).clip(true)
+        );
     }
     if state.show_size {
-        header_row = header_row.push(text("Size").width(size_width).size(15));
+        header_row = header_row.push(
+            container(text("Size").size(15).wrapping(Wrapping::None))
+                .width(size_width).clip(true)
+        );
     }
     if state.show_created {
-        header_row = header_row.push(text("Created").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("Created").size(15).wrapping(Wrapping::None))
+                .width(standard_width).clip(true)
+        );
     }
     if state.show_modified {
-        header_row = header_row.push(text("Modified").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("Modified").size(15).wrapping(Wrapping::None))
+                .width(standard_width).clip(true)
+        );
     }
     if state.show_accessed {
-        header_row = header_row.push(text("Accessed").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("Accessed").size(15).wrapping(Wrapping::None))
+                .width(standard_width).clip(true)
+        );
     }
     if state.show_format {
-        header_row = header_row.push(text("Format").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("Format").size(15).wrapping(Wrapping::None))
+                .width(standard_width).clip(true)
+        );
     }
     if state.calculate_mime {
-        header_row = header_row.push(text("Media Type").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("Media Type").size(15).wrapping(Wrapping::None))
+                .width(standard_width).clip(true)
+        );
     }
     if state.calculate_md5 {
-        header_row = header_row.push(text("MD5").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("MD5").size(15).wrapping(Wrapping::None))
+                .width(md5_width).clip(true)
+        );
     }
     if state.calculate_sha256 {
-        header_row = header_row.push(text("SHA256").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("SHA256").size(15).wrapping(Wrapping::None))
+                .width(sha256_width).clip(true)
+        );
     }
     if state.calculate_sha512 {
-        header_row = header_row.push(text("SHA512").width(standard_width).size(15));
+        header_row = header_row.push(
+            container(text("SHA512").size(15).wrapping(Wrapping::None))
+                .width(sha512_width).clip(true)
+        );
     }
     
     // Calculate visible range for virtual scrolling
@@ -1194,9 +1239,9 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         if state.show_accessed { if let Length::Fixed(w) = standard_width { width += w; } }
         if state.show_format { if let Length::Fixed(w) = standard_width { width += w; } }
         if state.calculate_mime { if let Length::Fixed(w) = standard_width { width += w; } }
-        if state.calculate_md5 { if let Length::Fixed(w) = standard_width { width += w; } }
-        if state.calculate_sha256 { if let Length::Fixed(w) = standard_width { width += w; } }
-        if state.calculate_sha512 { if let Length::Fixed(w) = standard_width { width += w; } }
+        if state.calculate_md5 { if let Length::Fixed(w) = md5_width { width += w; } }
+        if state.calculate_sha256 { if let Length::Fixed(w) = sha256_width { width += w; } }
+        if state.calculate_sha512 { if let Length::Fixed(w) = sha512_width { width += w; } }
         
         // Add spacing between columns (10px per gap)
         let visible_columns = [
@@ -1233,61 +1278,76 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                 let mut data_row = row![].spacing(10).padding([0, 10]).height(ROW_HEIGHT).align_y(Alignment::Center);
                 
                 if state.show_filename {
-                    data_row = data_row.push(text(&file.name).width(filename_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.name).size(14).wrapping(Wrapping::None))
+                            .width(filename_width).clip(true)
+                    );
                 }
                 if state.show_path {
-                    data_row = data_row.push(text(&file.directory_path).width(path_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.directory_path).size(14).wrapping(Wrapping::None))
+                            .width(path_width).clip(true)
+                    );
                 }
                 if state.show_path_name {
-                    data_row = data_row.push(text(&file.full_path).width(fullpath_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.full_path).size(14).wrapping(Wrapping::None))
+                            .width(fullpath_width).clip(true)
+                    );
                 }
                 if state.show_size {
-                    data_row = data_row.push(text(format_size(file.size)).width(size_width).size(14));
+                    data_row = data_row.push(
+                        container(text(format_size(file.size)).size(14).wrapping(Wrapping::None))
+                            .width(size_width).clip(true)
+                    );
                 }
                 if state.show_created {
-                    data_row = data_row.push(text(&file.created).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.created).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_modified {
-                    data_row = data_row.push(text(&file.last_modified).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.last_modified).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_accessed {
-                    data_row = data_row.push(text(&file.last_accessed).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.last_accessed).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_format {
-                    data_row = data_row.push(text(&file.format).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.format).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.calculate_mime {
-                    data_row = data_row.push(text(&file.mime_type).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.mime_type).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.calculate_md5 {
-                    let md5_text = if state.columns_expanded {
-                        file.md5.clone()
-                    } else if file.md5.len() > 12 {
-                        format!("{}...", &file.md5[..12])
-                    } else {
-                        file.md5.clone()
-                    };
-                    data_row = data_row.push(text(md5_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.md5).size(14).wrapping(Wrapping::None))
+                            .width(md5_width).clip(true)
+                    );
                 }
                 if state.calculate_sha256 {
-                    let sha256_text = if state.columns_expanded {
-                        file.sha256.clone()
-                    } else if file.sha256.len() > 12 {
-                        format!("{}...", &file.sha256[..12])
-                    } else {
-                        file.sha256.clone()
-                    };
-                    data_row = data_row.push(text(sha256_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.sha256).size(14).wrapping(Wrapping::None))
+                            .width(sha256_width).clip(true)
+                    );
                 }
                 if state.calculate_sha512 {
-                    let sha512_text = if state.columns_expanded {
-                        file.sha512.clone()
-                    } else if file.sha512.len() > 12 {
-                        format!("{}...", &file.sha512[..12])
-                    } else {
-                        file.sha512.clone()
-                    };
-                    data_row = data_row.push(text(sha512_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.sha512).size(14).wrapping(Wrapping::None))
+                            .width(sha512_width).clip(true)
+                    );
                 }
                 
                 viewport = viewport.push(data_row);
@@ -1326,31 +1386,58 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                 let mut data_row = row![].spacing(10).padding([0, 10]).height(ROW_HEIGHT).align_y(Alignment::Center);
                 
                 if state.show_filename {
-                    data_row = data_row.push(text(&file.name).width(filename_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.name).size(14).wrapping(Wrapping::None))
+                            .width(filename_width).clip(true)
+                    );
                 }
                 if state.show_path {
-                    data_row = data_row.push(text(&file.directory_path).width(path_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.directory_path).size(14).wrapping(Wrapping::None))
+                            .width(path_width).clip(true)
+                    );
                 }
                 if state.show_path_name {
-                    data_row = data_row.push(text(&file.full_path).width(fullpath_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.full_path).size(14).wrapping(Wrapping::None))
+                            .width(fullpath_width).clip(true)
+                    );
                 }
                 if state.show_size {
-                    data_row = data_row.push(text(format_size(file.size)).width(size_width).size(14));
+                    data_row = data_row.push(
+                        container(text(format_size(file.size)).size(14).wrapping(Wrapping::None))
+                            .width(size_width).clip(true)
+                    );
                 }
                 if state.show_created {
-                    data_row = data_row.push(text(&file.created).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.created).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_modified {
-                    data_row = data_row.push(text(&file.last_modified).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.last_modified).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_accessed {
-                    data_row = data_row.push(text(&file.last_accessed).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.last_accessed).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.show_format {
-                    data_row = data_row.push(text(&file.format).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.format).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.calculate_mime {
-                    data_row = data_row.push(text(&file.mime_type).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(&file.mime_type).size(14).wrapping(Wrapping::None))
+                            .width(standard_width).clip(true)
+                    );
                 }
                 if state.calculate_md5 {
                     let md5_text = if file.md5.len() > 12 {
@@ -1358,7 +1445,10 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                     } else {
                         file.md5.clone()
                     };
-                    data_row = data_row.push(text(md5_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(md5_text).size(14).wrapping(Wrapping::None))
+                            .width(md5_width).clip(true)
+                    );
                 }
                 if state.calculate_sha256 {
                     let sha256_text = if file.sha256.len() > 12 {
@@ -1366,7 +1456,10 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                     } else {
                         file.sha256.clone()
                     };
-                    data_row = data_row.push(text(sha256_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(sha256_text).size(14).wrapping(Wrapping::None))
+                            .width(sha256_width).clip(true)
+                    );
                 }
                 if state.calculate_sha512 {
                     let sha512_text = if file.sha512.len() > 12 {
@@ -1374,7 +1467,10 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                     } else {
                         file.sha512.clone()
                     };
-                    data_row = data_row.push(text(sha512_text).width(standard_width).size(14));
+                    data_row = data_row.push(
+                        container(text(sha512_text).size(14).wrapping(Wrapping::None))
+                            .width(sha512_width).clip(true)
+                    );
                 }
                 
                 body_rows = body_rows.push(data_row);
