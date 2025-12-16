@@ -357,6 +357,7 @@ enum Message {
     // Application Events
     ShowAbout,
     CloseAbout,
+    ShowLogs,
     Exit,
 }
 
@@ -768,6 +769,12 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         Message::CloseAbout => {
             state.show_about = false;
         }
+        Message::ShowLogs => {
+            // Open file manager at log directory
+            if let Some(log_dir) = super::logging::get_log_directory_path() {
+                open_file_manager(&log_dir);
+            }
+        }
         Message::Exit => {
             // Cancel any running scan before exiting
             if let Some(ref flag) = state.cancellation_flag {
@@ -828,6 +835,10 @@ fn view(state: &SplendirGui) -> Element<'_, Message> {
             .size(12)
             .color(iced::Color::from_rgb(0.5, 0.5, 0.5)),
         Space::new().width(Length::Fixed(20.0)),
+        button(text("Show Logs").size(14))
+            .on_press(Message::ShowLogs)
+            .padding([5, 10]),
+        Space::new().width(Length::Fixed(10.0)),
         button(text("About").size(14))
             .on_press(Message::ShowAbout)
             .padding([5, 10]),
@@ -1951,4 +1962,52 @@ fn sort_files(files: &mut Vec<FileInfo>, original_order: &[FileInfo], sort_by: S
             SortOrder::Descending => cmp.reverse(),
         }
     });
+}
+
+/// Open file manager at the specified directory path
+/// Works cross-platform: Linux, macOS, and Windows
+fn open_file_manager(path: &std::path::Path) {
+    use std::process::Command;
+    
+    // Ensure the directory exists
+    if !path.exists() {
+        tracing::warn!(path = %path.display(), "Log directory does not exist");
+        return;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        // Try xdg-open first (works on most Linux desktops)
+        let result = Command::new("xdg-open")
+            .arg(path)
+            .spawn();
+        
+        if result.is_err() {
+            tracing::error!(path = %path.display(), "Failed to open file manager on Linux");
+        }
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        let result = Command::new("open")
+            .arg(path)
+            .spawn();
+        
+        if result.is_err() {
+            tracing::error!(path = %path.display(), "Failed to open file manager on macOS");
+        }
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        let result = Command::new("explorer")
+            .arg(path)
+            .spawn();
+        
+        if result.is_err() {
+            tracing::error!(path = %path.display(), "Failed to open file manager on Windows");
+        }
+    }
+    
+    tracing::info!(path = %path.display(), "Opened file manager at log directory");
 }

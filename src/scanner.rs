@@ -1,13 +1,14 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::io::{self, Read};
 use std::time::SystemTime;
 use sha2::{Sha256, Sha512, Digest};
 use walkdir::WalkDir;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
 use rayon::prelude::*;
 use std::collections::HashSet;
+use tracing::{debug, info, warn, error};
 
 use crate::{FileInfo, TreeNode, ScanError};
 
@@ -51,6 +52,8 @@ pub struct DirectoryScanner {
     pub skip_virtual_filesystems: bool,
     /// Stay on the same filesystem (don't cross mount boundaries)
     pub stay_on_filesystem: bool,
+    /// Optional collector for permission/access errors encountered during scanning
+    pub error_collector: Option<Arc<Mutex<Vec<PathBuf>>>>,
 }
 
 impl std::fmt::Debug for DirectoryScanner {
@@ -67,6 +70,7 @@ impl std::fmt::Debug for DirectoryScanner {
             .field("skip_virtual_filesystems", &self.skip_virtual_filesystems)
             .field("stay_on_filesystem", &self.stay_on_filesystem)
             .field("cancellation_flag", &"<Arc<AtomicBool>>")
+            .field("error_collector", &"<Option<Arc<Mutex<Vec<PathBuf>>>>>")
             .finish()
     }
 }
@@ -85,6 +89,7 @@ impl Default for DirectoryScanner {
             cancellation_flag: None,
             skip_virtual_filesystems: true,  // Safe default
             stay_on_filesystem: false,
+            error_collector: None,
         }
     }
 }
@@ -149,6 +154,11 @@ impl DirectoryScanner {
         self
     }
     
+    pub fn error_collector(mut self, collector: Arc<Mutex<Vec<PathBuf>>>) -> Self {
+        self.error_collector = Some(collector);
+        self
+    }
+    
     /// Scan directory and return detailed file information
     pub fn scan_detailed(&self, path: &Path) -> Result<Vec<FileInfo>, ScanError> {
         self.scan_detailed_with_progress(path, None)
@@ -160,6 +170,14 @@ impl DirectoryScanner {
         path: &Path, 
         progress_callback: Option<ProgressCallback>
     ) -> Result<Vec<FileInfo>, ScanError> {
+        info!(
+            path = %path.display(),
+            include_dotfiles = self.include_dotfiles,
+            follow_symlinks = self.follow_symlinks,
+            skip_virtual_filesystems = self.skip_virtual_filesystems,
+            "Starting detailed directory scan"
+        );
+        
         validate_path(path)?;
         
         // Build mount info for virtual filesystem detection
@@ -178,7 +196,33 @@ impl DirectoryScanner {
         // Collect all file paths first (sequential traversal)
         let files: Vec<_> = walker
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(|e| match e {
+                Ok(entry) => Some(entry),
+                Err(err) => {
+                    // Log walkdir errors with context
+                    if let Some(path) = err.path() {
+                        if err.io_error()
+                            .map(|io_err| io_err.kind() == io::ErrorKind::PermissionDenied)
+                            .unwrap_or(false)
+                        {
+                            warn!(
+                                path = %path.display(),
+                                "Permission denied accessing path during scan"
+                            );
+                        } else {
+                            error!(
+                                path = %path.display(),
+                                error = %err,
+                                error_kind = ?err.io_error().map(|e| e.kind()),
+                                "Error accessing path during scan"
+                            );
+                        }
+                    } else {
+                        error!(error = %err, "Error during directory traversal");
+                    }
+                    None
+                }
+            })
             .filter(|e| {
                 // Check cancellation before processing each entry
                 if let Some(ref flag) = self.cancellation_flag {
@@ -261,9 +305,24 @@ impl DirectoryScanner {
                 }
                 
                 match result {
-                    Ok(info) => Some(info),
+                    Ok(info) => {
+                        debug!(path = %path.display(), size = info.size, "Processed file");
+                        Some(info)
+                    }
                     Err(e) => {
-                        eprintln!("Error processing file '{}': {}", path.display(), e);
+                        if e.kind() == io::ErrorKind::PermissionDenied {
+                            warn!(
+                                path = %path.display(),
+                                "Permission denied reading file"
+                            );
+                        } else {
+                            error!(
+                                path = %path.display(),
+                                error = %e,
+                                error_kind = ?e.kind(),
+                                "Error processing file"
+                            );
+                        }
                         None
                     }
                 }
@@ -273,6 +332,7 @@ impl DirectoryScanner {
         // Check cancellation after processing
         if let Some(ref flag) = self.cancellation_flag {
             if flag.load(Ordering::Relaxed) {
+                warn!(path = %path.display(), "Scan cancelled by user");
                 return Err(ScanError::Cancelled);
             }
         }
@@ -280,6 +340,13 @@ impl DirectoryScanner {
         if let Some(ref callback) = progress_callback {
             callback(1.0, format!("Scan completed: {} files processed", total_files));
         }
+        
+        info!(
+            path = %path.display(),
+            file_count = file_infos.len(),
+            total_files = total_files,
+            "Detailed directory scan completed"
+        );
         
         Ok(file_infos)
     }
@@ -295,6 +362,12 @@ impl DirectoryScanner {
         path: &Path,
         progress_callback: Option<ProgressCallback>
     ) -> Result<TreeNode, ScanError> {
+        info!(
+            path = %path.display(),
+            skip_virtual_filesystems = self.skip_virtual_filesystems,
+            "Starting tree scan"
+        );
+        
         validate_path(path)?;
         
         // Build mount info for virtual filesystem detection
@@ -314,6 +387,24 @@ impl DirectoryScanner {
             callback(1.0, "Tree scan completed".to_string());
         }
         
+        match &result {
+            Ok(tree) => {
+                let node_count = count_tree_nodes(tree);
+                info!(
+                    path = %path.display(),
+                    node_count = node_count,
+                    "Tree scan completed"
+                );
+            }
+            Err(e) => {
+                error!(
+                    path = %path.display(),
+                    error = %e,
+                    "Tree scan failed"
+                );
+            }
+        }
+        
         result
     }
     
@@ -328,6 +419,10 @@ impl DirectoryScanner {
         path: &Path,
         progress_callback: Option<ProgressCallback>
     ) -> Result<DirectoryStats, ScanError> {
+        info!(path = %path.display(), "Starting statistics scan");
+        
+        let start_time = std::time::Instant::now();
+        
         validate_path(path)?;
         
         // Build mount info for virtual filesystem detection
@@ -344,7 +439,32 @@ impl DirectoryScanner {
             walker = walker.max_depth(depth);
         }
         
-        let entries: Vec<_> = walker.into_iter().filter_map(|e| e.ok()).collect();
+        let entries: Vec<_> = walker
+            .into_iter()
+            .filter_map(|e| match e {
+                Ok(entry) => Some(entry),
+                Err(err) => {
+                    if let Some(path) = err.path() {
+                        if err.io_error()
+                            .map(|io_err| io_err.kind() == io::ErrorKind::PermissionDenied)
+                            .unwrap_or(false)
+                        {
+                            warn!(
+                                path = %path.display(),
+                                "Permission denied during statistics scan"
+                            );
+                        } else {
+                            error!(
+                                path = %path.display(),
+                                error = %err,
+                                "Error during statistics scan"
+                            );
+                        }
+                    }
+                    None
+                }
+            })
+            .collect();
         let total = entries.len();
         
         for (i, entry) in entries.iter().enumerate() {
@@ -380,6 +500,16 @@ impl DirectoryScanner {
             callback(1.0, "Analysis completed".to_string());
         }
         
+        let elapsed = start_time.elapsed();
+        info!(
+            path = %path.display(),
+            file_count = stats.file_count,
+            directory_count = stats.directory_count,
+            total_size = stats.total_size,
+            duration_ms = elapsed.as_millis(),
+            "Statistics scan completed"
+        );
+        
         Ok(stats)
     }
     
@@ -396,6 +526,7 @@ impl DirectoryScanner {
             for component in path.components() {
                 if let std::path::Component::Normal(name) = component {
                     if name.to_string_lossy().starts_with('.') {
+                        debug!(path = %path.display(), "Skipping dotfile/directory");
                         return false;
                     }
                 }
@@ -405,6 +536,14 @@ impl DirectoryScanner {
         // Check virtual filesystem and mount boundary filters
         if let Some(ref info) = mount_info {
             if !info.should_include_path(path, self.skip_virtual_filesystems, self.stay_on_filesystem) {
+                if self.skip_virtual_filesystems {
+                    debug!(
+                        path = %path.display(),
+                        "Skipping virtual filesystem or mount boundary"
+                    );
+                } else if self.stay_on_filesystem {
+                    debug!(path = %path.display(), "Skipping path on different filesystem");
+                }
                 return false;
             }
         }
@@ -476,7 +615,20 @@ impl DirectoryScanner {
                 match self.build_tree_node(&child_path, current_depth + 1, progress_callback, mount_info) {
                     Ok(child_node) => children.push(child_node),
                     Err(ScanError::Cancelled) => return Err(ScanError::Cancelled),
-                    Err(e) => eprintln!("Error building tree for '{}': {}", child_path.display(), e),
+                    Err(e) => {
+                        error!(
+                            path = %child_path.display(),
+                            error = %e,
+                            "Error building tree node"
+                        );
+                        
+                        // Collect error path if collector is present
+                        if let Some(ref collector) = self.error_collector {
+                            if let Ok(mut errors) = collector.lock() {
+                                errors.push(child_path.clone());
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1077,4 +1229,9 @@ fn identify_mime_type(path: &Path) -> Option<String> {
     Some(mime_guess::from_path(path)
         .first_or_octet_stream()
         .to_string())
+}
+
+/// Count total nodes in a tree (for logging)
+fn count_tree_nodes(node: &TreeNode) -> usize {
+    1 + node.children.iter().map(count_tree_nodes).sum::<usize>()
 }
