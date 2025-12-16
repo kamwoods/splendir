@@ -94,7 +94,7 @@ Splendir makes an effort not to elide or obfuscate information about which files
 
 ![Splendir Log Access](assets/sds-logs.png)
 
-Splendir maintains a daily log in the ``.splendir`` directory of the user's home directory, the content of which is maintained for 30 days (or until the next time the Splendir application is launched after 30 days). These logs include more detailed infomation about the operation of the Splendir tool in addition to directory skip notifications and permissions errors that are reported in the **Directory Analysis** output.
+Splendir maintains a daily log in the ``.splendir`` directory of the user's home directory, the content of which is maintained for 30 days (or until the next time the Splendir application is launched after 30 days from the creation of that log file). These logs include more detailed infomation about the operation of the Splendir tool in addition to directory skip notifications and permissions errors that are reported in the **Directory Analysis** output. Clicking the **Show Logs** button in the bottom right of the interface will bring up a file manager window providing direct access to these daily logs.
 
 
 ### Build (Developers and Contributors)
