@@ -179,6 +179,7 @@ pub fn analyze_directory(path: &Path, include_dotfiles: bool, max_depth: Option<
         path: path.to_path_buf(),
         volume_info,
         skipped_virtual_filesystems: Vec::new(),
+        permission_errors: Vec::new(),
     })
 }
 
@@ -226,11 +227,15 @@ pub fn analyze_directory_with_options(
 ) -> Result<DirectoryAnalysis, ScanError> {
     use scanner::MountInfo;
     
+    // Create error collector to track permission/access errors
+    let error_collector = Arc::new(std::sync::Mutex::new(Vec::new()));
+    
     let scanner = DirectoryScanner::new()
         .include_dotfiles(options.include_dotfiles)
         .skip_virtual_filesystems(options.skip_virtual_filesystems)
         .stay_on_filesystem(options.stay_on_filesystem)
-        .max_depth(options.max_depth.unwrap_or(50));
+        .max_depth(options.max_depth.unwrap_or(50))
+        .error_collector(error_collector.clone());
     
     // For analysis, we'll divide progress into three phases
     let stats_callback = {
@@ -270,6 +275,12 @@ pub fn analyze_directory_with_options(
     
     progress_callback(1.0, "Analysis completed".to_string());
     
+    // Extract permission errors from collector
+    let permission_errors = error_collector
+        .lock()
+        .map(|guard| guard.clone())
+        .unwrap_or_default();
+    
     Ok(DirectoryAnalysis {
         stats,
         tree,
@@ -277,6 +288,7 @@ pub fn analyze_directory_with_options(
         path: path.to_path_buf(),
         volume_info,
         skipped_virtual_filesystems,
+        permission_errors,
     })
 }
 
@@ -289,6 +301,7 @@ pub struct DirectoryAnalysis {
     pub path: PathBuf,
     pub volume_info: Option<filesystem::VolumeInfo>,
     pub skipped_virtual_filesystems: Vec<PathBuf>,
+    pub permission_errors: Vec<PathBuf>,
 }
 
 impl DirectoryAnalysis {
@@ -347,6 +360,14 @@ impl DirectoryAnalysis {
                 .map(|p| p.display().to_string())
                 .collect();
             summary.push_str(&format!("\nSkipped virtual file systems at: {}\n", paths.join(", ")));
+        }
+        
+        // Permission errors (only if non-empty)
+        if !self.permission_errors.is_empty() {
+            summary.push_str("\nPermission errors occurred processing the following files and/or directories:\n");
+            for error_path in &self.permission_errors {
+                summary.push_str(&format!("{}\n", error_path.display()));
+            }
         }
         
         summary

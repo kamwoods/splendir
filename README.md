@@ -86,7 +86,16 @@ The **Detailed File List** view is exported as a UTF-8 encoded CSV file (this ca
 
 ![Splendir Directory Analysis View](assets/sds-analysis.png)
 
-The **Directory Analysis** view provides some basic information about the total size of the directory scanned and the types and counts of files encountered. This view also indicates the filesystem type for the base directory associated with the scan, and provides a simple distribution of the file sizes encountered.
+The **Directory Analysis** view provides some basic information about the total size of the directory scanned and the types and counts of files encountered. This view also indicates the filesystem type for the base directory associated with the scan, and provides a simple distribution of the file sizes encountered. In certain scan scenarios involving live file systems, directories containing virtual ("special") files related to system operations may be skipped. In cases where the Splendir application does not have the requisite permissions to process a particular file or directory, those cases will be logged and noted in the Directory Analysis results view. These situations are described in further detail below.
+
+![Splendir Directory Analysis Warnings](assets/sds-warnings.png)
+
+Splendir makes an effort not to elide or obfuscate information about which files and directory entries on a filesystem have been skipped, whether those entries are likely irrelevant to a preservation process (virtual files on a live filesystem) or potentially more important (failed to process because the current user running the Splendir application does not have permissions to access them). The above screenshot shows Splendir recording both of these cases - virtual filesystems and special files areas skipped, and regular files not processed due to permissions issues - in the Directory Analysis output.
+
+![Splendir Log Access](assets/sds-logs.png)
+
+Splendir maintains a daily log in the ``.splendir`` directory of the user's home directory, the content of which is maintained for 30 days (or until the next time the Splendir application is launched after 30 days). These logs include more detailed infomation about the operation of the Splendir tool in addition to directory skip notifications and permissions errors that are reported in the **Directory Analysis** output.
+
 
 ### Build (Developers and Contributors)
 

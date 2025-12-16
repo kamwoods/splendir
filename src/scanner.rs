@@ -1,10 +1,10 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::io::{self, Read};
 use std::time::SystemTime;
 use sha2::{Sha256, Sha512, Digest};
 use walkdir::WalkDir;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -52,6 +52,8 @@ pub struct DirectoryScanner {
     pub skip_virtual_filesystems: bool,
     /// Stay on the same filesystem (don't cross mount boundaries)
     pub stay_on_filesystem: bool,
+    /// Optional collector for permission/access errors encountered during scanning
+    pub error_collector: Option<Arc<Mutex<Vec<PathBuf>>>>,
 }
 
 impl std::fmt::Debug for DirectoryScanner {
@@ -68,6 +70,7 @@ impl std::fmt::Debug for DirectoryScanner {
             .field("skip_virtual_filesystems", &self.skip_virtual_filesystems)
             .field("stay_on_filesystem", &self.stay_on_filesystem)
             .field("cancellation_flag", &"<Arc<AtomicBool>>")
+            .field("error_collector", &"<Option<Arc<Mutex<Vec<PathBuf>>>>>")
             .finish()
     }
 }
@@ -86,6 +89,7 @@ impl Default for DirectoryScanner {
             cancellation_flag: None,
             skip_virtual_filesystems: true,  // Safe default
             stay_on_filesystem: false,
+            error_collector: None,
         }
     }
 }
@@ -147,6 +151,11 @@ impl DirectoryScanner {
     
     pub fn stay_on_filesystem(mut self, stay: bool) -> Self {
         self.stay_on_filesystem = stay;
+        self
+    }
+    
+    pub fn error_collector(mut self, collector: Arc<Mutex<Vec<PathBuf>>>) -> Self {
+        self.error_collector = Some(collector);
         self
     }
     
@@ -612,6 +621,13 @@ impl DirectoryScanner {
                             error = %e,
                             "Error building tree node"
                         );
+                        
+                        // Collect error path if collector is present
+                        if let Some(ref collector) = self.error_collector {
+                            if let Ok(mut errors) = collector.lock() {
+                                errors.push(child_path.clone());
+                            }
+                        }
                     }
                 }
             }
