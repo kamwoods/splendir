@@ -1,7 +1,7 @@
 use iced::{
-    widget::{button, checkbox, column, container, pick_list, progress_bar, row, scrollable, text, text_input, rule, Column, Space, Id},
+    widget::{button, checkbox, column, container, pick_list, progress_bar, row, scrollable, text, text_input, rule, Column, Space, Id, mouse_area},
     widget::text::Wrapping,
-    Alignment, Element, Length, Theme, Task, Font, time,
+    Alignment, Element, Length, Theme, Task, Font, time, Point, mouse,
 };
 use iced::widget::scrollable::AbsoluteOffset;
 use iced::widget::operation::scroll_to;
@@ -230,6 +230,12 @@ struct SplendirGui {
     
     // Column expansion state
     columns_expanded: bool,
+    
+    // Row hover state
+    hovered_row: Option<usize>,
+    
+    // Context menu state (modal, not positioned at cursor)
+    context_menu_row: Option<usize>,
 }
 
 impl Default for ScanMode {
@@ -289,6 +295,8 @@ impl Default for SplendirGui {
             detail_scroll_offset: 0.0,
             show_about: false,
             columns_expanded: false,
+            hovered_row: None,
+            context_menu_row: None,
         }
     }
 }
@@ -353,6 +361,13 @@ enum Message {
     // Scrolling Events
     TreeScrolled(f32),
     DetailScrolled(f32),
+    
+    // Row interaction events
+    RowHovered(Option<usize>),
+    RowMouseMove(usize),
+    RowRightClicked(usize),
+    ShowFileInFolder(PathBuf),
+    CloseContextMenu,
     
     // Application Events
     ShowAbout,
@@ -759,9 +774,53 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
         }
         Message::TreeScrolled(offset) => {
             state.tree_scroll_offset = offset;
+            // Clear hover when scrolling
+            state.hovered_row = None;
         }
         Message::DetailScrolled(offset) => {
             state.detail_scroll_offset = offset;
+            // Clear hover when scrolling
+            state.hovered_row = None;
+        }
+        Message::RowHovered(row_index) => {
+            state.hovered_row = row_index;
+        }
+        Message::RowMouseMove(row_index) => {
+            // Set hover when mouse moves over a row
+            state.hovered_row = Some(row_index);
+        }
+        Message::RowRightClicked(row_index) => {
+            state.context_menu_row = Some(row_index);
+            
+            // Restore scroll position immediately to prevent jump
+            return scroll_to(
+                Id::new("detailed_results_scroll"),
+                AbsoluteOffset { x: 0.0, y: state.detail_scroll_offset }
+            );
+        }
+        Message::ShowFileInFolder(file_path) => {
+            // Close the context menu
+            state.context_menu_row = None;
+            
+            // Open the file's parent directory in file manager
+            if let Some(parent) = file_path.parent() {
+                open_file_manager(parent);
+            }
+            
+            // Restore scroll position
+            return scroll_to(
+                Id::new("detailed_results_scroll"),
+                AbsoluteOffset { x: 0.0, y: state.detail_scroll_offset }
+            );
+        }
+        Message::CloseContextMenu => {
+            state.context_menu_row = None;
+            
+            // Restore scroll position
+            return scroll_to(
+                Id::new("detailed_results_scroll"),
+                AbsoluteOffset { x: 0.0, y: state.detail_scroll_offset }
+            );
         }
         Message::ShowAbout => {
             state.show_about = true;
@@ -862,13 +921,21 @@ fn view(state: &SplendirGui) -> Element<'_, Message> {
         .height(Length::Fill)
         .padding(15);
     
-    // If showing about dialog, overlay it on top
-    if state.show_about {
-        iced::widget::stack![
-            base_view,
-            view_about_dialog()
-        ]
-        .into()
+    // Stack overlays: about dialog and/or context menu
+    if state.show_about || state.context_menu_row.is_some() {
+        let mut stack = iced::widget::stack![base_view];
+        
+        if state.show_about {
+            stack = stack.push(view_about_dialog());
+        }
+        
+        if let Some(row_index) = state.context_menu_row {
+            if let Some(file) = state.scan_results.detailed_files.get(row_index) {
+                stack = stack.push(view_context_menu(file));
+            }
+        }
+        
+        stack.into()
     } else {
         base_view.into()
     }
@@ -1361,7 +1428,31 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                     );
                 }
                 
-                viewport = viewport.push(data_row);
+                // Wrap row with hover and right-click support
+                let is_hovered = state.hovered_row == Some(i);
+                let row_index = i;
+                
+                let row_container = container(data_row)
+                    .width(Length::Fill)
+                    .height(Length::Fixed(ROW_HEIGHT))
+                    .style(move |_theme: &Theme| {
+                        container::Style {
+                            background: if is_hovered {
+                                Some(iced::Background::Color(iced::Color::from_rgb(0.2, 0.2, 0.25)))
+                            } else {
+                                None
+                            },
+                            ..Default::default()
+                        }
+                    });
+                
+                let interactive_row = mouse_area(row_container)
+                    .interaction(iced::mouse::Interaction::Pointer)
+                    .on_move(move |_point| Message::RowMouseMove(row_index))
+                    .on_exit(Message::RowHovered(None))
+                    .on_right_press(Message::RowRightClicked(row_index));
+                
+                viewport = viewport.push(interactive_row);
             }
         }
         
@@ -1484,7 +1575,31 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                     );
                 }
                 
-                body_rows = body_rows.push(data_row);
+                // Wrap row with hover and right-click support
+                let is_hovered = state.hovered_row == Some(i);
+                let row_index = i;
+                
+                let row_container = container(data_row)
+                    .width(Length::Fill)
+                    .height(Length::Fixed(ROW_HEIGHT))
+                    .style(move |_theme: &Theme| {
+                        container::Style {
+                            background: if is_hovered {
+                                Some(iced::Background::Color(iced::Color::from_rgb(0.2, 0.2, 0.25)))
+                            } else {
+                                None
+                            },
+                            ..Default::default()
+                        }
+                    });
+                
+                let interactive_row = mouse_area(row_container)
+                    .interaction(iced::mouse::Interaction::Pointer)
+                    .on_move(move |_point| Message::RowMouseMove(row_index))
+                    .on_exit(Message::RowHovered(None))
+                    .on_right_press(Message::RowRightClicked(row_index));
+                
+                body_rows = body_rows.push(interactive_row);
             }
         }
         
@@ -1543,7 +1658,7 @@ fn view_tree_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     let end_index = (start_index + VISIBLE_ROWS).min(total_nodes);
     
     // Create virtual viewport
-    let mut viewport = Column::new().spacing(0);
+    let mut viewport = Column::new().spacing(0).width(Length::Fill);
     
     // Add spacer for items above viewport
     if start_index > 0 {
@@ -1570,6 +1685,7 @@ fn view_tree_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                         .size(14)
                         .font(Font::MONOSPACE)
                 )
+                .width(Length::Fill)
                 .height(ROW_HEIGHT)
             );
         }
@@ -1662,6 +1778,75 @@ fn view_about_dialog() -> Element<'static, Message> {
                 ..Default::default()
             }
         })
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .center(Length::Fill)
+    .style(|_theme| {
+        container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7))),
+            ..Default::default()
+        }
+    });
+    
+    overlay.into()
+}
+
+fn view_context_menu(file: &FileInfo) -> Element<'static, Message> {
+    let file_path = PathBuf::from(&file.full_path);
+    let file_name = file.name.clone();
+    
+    let menu_content = column![
+        text(format!("File: {}", file_name))
+            .size(16)
+            .color(iced::Color::WHITE)
+            .wrapping(Wrapping::Glyph),
+        Space::new().height(Length::Fixed(10.0)),
+        text(format!("Path: {}", file.directory_path))
+            .size(12)
+            .color(iced::Color::from_rgb(0.7, 0.7, 0.7))
+            .wrapping(Wrapping::Glyph),
+        Space::new().height(Length::Fixed(20.0)),
+        row![
+            Space::new().width(Length::Fill),
+            button(
+                text("Show File in Folder")
+                    .size(14)
+            )
+            .on_press(Message::ShowFileInFolder(file_path))
+            .padding([8, 16]),
+        ]
+        .spacing(10),
+        Space::new().height(Length::Fixed(10.0)),
+        row![
+            Space::new().width(Length::Fill),
+            button(
+                text("Close")
+                    .size(14)
+            )
+            .on_press(Message::CloseContextMenu)
+            .padding([8, 16]),
+        ]
+        .spacing(10),
+    ]
+    .spacing(0)
+    .width(Length::Fixed(400.0));
+    
+    // Semi-transparent dark overlay
+    let overlay = container(
+        container(menu_content)
+            .padding(20)
+            .style(|_theme| {
+                container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgb(0.15, 0.15, 0.15))),
+                    border: iced::Border {
+                        color: iced::Color::from_rgb(0.4, 0.4, 0.4),
+                        width: 2.0,
+                        radius: 10.0.into(),
+                    },
+                    ..Default::default()
+                }
+            })
     )
     .width(Length::Fill)
     .height(Length::Fill)
