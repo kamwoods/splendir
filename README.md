@@ -70,19 +70,23 @@ The **Traversal Options** control which types of files should be included in the
 - **Skip virtual filesystems** is checked by default, and skips specific locations including ``/proc``, ``/run``, ``/sys``, and ``/tmp`` on Linux if you happen to be scanning a live file system from the ``/`` root directory, or ``devfs`` and ``autofs`` mounts on macOS.
 - **Stay on same filesystem** is unchecked by default, but can be checked to restrict the scan from switching filesystems (for example, in Linux if a directory contains multiple mount locations for different filesystems).
 
-Splendir will distribute work among all available CPU cores to provide maximum performance when running long scans (for example, computing MD5 or SHA hashes for many files). You can terminate a long-running scan by clicking **Cancel** at any time. The scan will be shut down once the most recent batch of 10 files has completed. Clicking **Exit** during a scan will also trigger a cancellation.
+Splendir will distribute work among all available CPU cores to provide maximum performance when running long scans (for example, computing MD5 or SHA hashes for many files). Terminate a long-running scan by clicking **Cancel** at any time. The scan will be shut down once the most recent batch of 10 files has completed. Clicking **Exit** during a scan will also trigger a cancellation.
 
 ![Splendir Directory Listing View](assets/sds-dirview.png)
 
 Both the **Directory Listing** view and **Tree View** are implemented with a virtual scrolling feature to provide live views of directories of any size. When scanning large directories, you will see a progress report as the tool builds this data structure. Once the directory has been scanned, you can scroll to any point in the output to inspect and review before exporting. The **Directory Listing** view collapses all selected columns into the viewable area by default. To see the full output in each column, click **Expand Columns**. The vertical scroll position is maintained when expanding or collapsing columns.
 
-You can also adjust the **Sort Options** to instantly view and export sorted results without having to rescan. The **Default** sort option is an alphabetized directory walk (all subdirectory entries grouped together at each level).
+Adjust the **Sort Options** to instantly view and export sorted results without having to rescan. The **Default** sort option is an alphabetized directory walk (all subdirectory entries grouped together at each level).
 
-You can check or uncheck the basic metadata (File Name, Path, Path + Name, Size, Created, Modified, Accessed) in **File Options** to add or remove these columns without having to rescan. Checking Format, Media Type, MD5, SHA256, or SHA512 will display the column but the results will not be populated unless these were checked at the time of the scan.
+Check or uncheck the basic metadata (File Name, Path, Path + Name, Size, Created, Modified, Accessed) in **File Options** to add or remove these columns without having to rescan. Checking Format, Media Type, MD5, SHA256, or SHA512 will display the column but the results will not be populated unless these were checked at the time of the scan.
+
+![Splendir Tree Listing View](assets/sds-diropen.png)
+
+Hovering over an individual line in the output will highlight that line. Right-clicking on the line will bring up a context dialog providing the option to **Show File In Folder**, or **Close** and return to the output listing.
 
 ![Splendir Tree Listing View](assets/sds-treeview.png)
 
-The **Detailed File List** view is exported as a UTF-8 encoded CSV file (this can be conveniently viewed in a spreadsheet), and the **Tree View** is exported as a UTF-8 encoded text file.
+The **Tree View** displays a simple graphical tree view along with a count of the total number of nodes (directories and files) in the tree. Currently, the tree view does not display any file or directory metadata.
 
 ![Splendir Directory Analysis View](assets/sds-analysis.png)
 
