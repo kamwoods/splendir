@@ -237,18 +237,22 @@ pub fn analyze_directory_with_options(
         .max_depth(options.max_depth.unwrap_or(50))
         .error_collector(error_collector.clone());
     
-    // For analysis, we'll divide progress into three phases
+    // For analysis, we'll divide progress into two sub-phases (stats and tree)
+    // Note: We don't add "Phase X/3" prefixes here - the caller handles phase labeling
+    // if this function is being used as part of a larger multi-phase operation
     let stats_callback = {
         let callback = progress_callback.clone();
         Arc::new(move |p: f32, s: String| {
-            callback(p * 0.33, format!("Phase 1/3: {}", s));
+            // Stats is first half of progress (0.0 - 0.5)
+            callback(p * 0.5, s);
         })
     };
     
     let tree_callback = {
         let callback = progress_callback.clone();
         Arc::new(move |p: f32, s: String| {
-            callback(0.33 + p * 0.33, format!("Phase 2/3: {}", s));
+            // Tree is second half of progress (0.5 - 1.0)
+            callback(0.5 + p * 0.5, s);
         })
     };
     
@@ -270,7 +274,7 @@ pub fn analyze_directory_with_options(
     let stats = scanner.scan_stats_with_progress(path, Some(stats_callback))?;
     let tree = scanner.scan_tree_with_progress(path, Some(tree_callback))?;
     
-    progress_callback(0.66, "Phase 3/3: Counting file types...".to_string());
+    progress_callback(0.95, "Counting file types...".to_string());
     let file_type_counts = count_files_by_type(&tree);
     
     progress_callback(1.0, "Analysis completed".to_string());
