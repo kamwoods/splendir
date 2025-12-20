@@ -2,7 +2,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing_subscriber::fmt;
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use std::io::Write;
+use std::sync::{Arc, Mutex};
 
 /// Initialize logging to ~/.splendir/logs with daily rotation
 /// and automatic cleanup of logs older than `retention_days`
@@ -15,12 +16,8 @@ pub fn init_logging(retention_days: u64) -> Result<(), Box<dyn std::error::Error
     // Clean up old log files
     cleanup_old_logs(&log_dir, retention_days)?;
     
-    // Set up file appender with daily rotation
-    let file_appender = RollingFileAppender::new(
-        Rotation::DAILY,
-        &log_dir,
-        "splendir.log"
-    );
+    // Create custom file appender with desired naming format
+    let file_appender = DailyFileAppender::new(&log_dir)?;
     
     // Initialize the subscriber
     tracing_subscriber::fmt()
@@ -40,6 +37,93 @@ pub fn init_logging(retention_days: u64) -> Result<(), Box<dyn std::error::Error
     tracing::info!("Log retention set to {} days", retention_days);
     
     Ok(())
+}
+
+/// Custom daily file appender that creates files named splendir-YYYY-MM-DD.log
+#[derive(Clone)]
+struct DailyFileAppender {
+    inner: Arc<Mutex<DailyFileAppenderInner>>,
+}
+
+struct DailyFileAppenderInner {
+    log_dir: PathBuf,
+    current_file: Option<fs::File>,
+    current_date: String,
+}
+
+impl DailyFileAppender {
+    fn new(log_dir: &PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self {
+            inner: Arc::new(Mutex::new(DailyFileAppenderInner {
+                log_dir: log_dir.clone(),
+                current_file: None,
+                current_date: String::new(),
+            })),
+        })
+    }
+}
+
+impl DailyFileAppenderInner {
+    fn get_current_date() -> String {
+        use chrono::Local;
+        Local::now().format("%Y-%m-%d").to_string()
+    }
+    
+    fn get_file(&mut self) -> Result<&mut fs::File, std::io::Error> {
+        let today = Self::get_current_date();
+        
+        // Check if we need to rotate to a new file
+        if self.current_date != today || self.current_file.is_none() {
+            let filename = format!("splendir-{}.log", today);
+            let filepath = self.log_dir.join(filename);
+            
+            let file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(filepath)?;
+            
+            self.current_file = Some(file);
+            self.current_date = today;
+        }
+        
+        Ok(self.current_file.as_mut().unwrap())
+    }
+    
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.get_file()?.write(buf)
+    }
+    
+    fn flush(&mut self) -> std::io::Result<()> {
+        if let Some(file) = &mut self.current_file {
+            file.flush()
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for DailyFileAppender {
+    type Writer = DailyFileWriter;
+    
+    fn make_writer(&'a self) -> Self::Writer {
+        DailyFileWriter {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+struct DailyFileWriter {
+    inner: Arc<Mutex<DailyFileAppenderInner>>,
+}
+
+impl Write for DailyFileWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.inner.lock().unwrap().write(buf)
+    }
+    
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.lock().unwrap().flush()
+    }
 }
 
 /// Get the log directory path (~/.splendir/logs)
@@ -67,9 +151,9 @@ fn cleanup_old_logs(log_dir: &PathBuf, retention_days: u64) -> Result<(), Box<dy
         for entry in entries.flatten() {
             let path = entry.path();
             
-            // Only process log files (*.log*)
+            // Only process log files (splendir-*.log)
             if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                if !filename.starts_with("splendir.log") {
+                if !filename.starts_with("splendir-") || !filename.ends_with(".log") {
                     continue;
                 }
                 
@@ -128,9 +212,9 @@ mod tests {
         let log_dir = temp_dir.path().to_path_buf();
         
         // Create a few test log files
-        let old_log = log_dir.join("splendir.log.2020-01-01");
-        let recent_log = log_dir.join("splendir.log.2024-12-01");
-        let current_log = log_dir.join("splendir.log");
+        let old_log = log_dir.join("splendir-2020-01-01.log");
+        let recent_log = log_dir.join("splendir-2024-12-01.log");
+        let current_log = log_dir.join("splendir-2024-12-19.log");
         
         File::create(&old_log).unwrap().write_all(b"old").unwrap();
         File::create(&recent_log).unwrap().write_all(b"recent").unwrap();

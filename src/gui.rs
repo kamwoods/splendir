@@ -1229,7 +1229,7 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     
     if state.show_filename {
         header_row = header_row.push(
-            container(text("File").size(15).wrapping(Wrapping::None))
+            container(text("File Name").size(15).wrapping(Wrapping::None))
                 .width(filename_width).clip(true)
         );
     }
@@ -2032,9 +2032,9 @@ async fn export_results(path: PathBuf, results: ScanResults, mode: ScanMode, col
             ScanMode::Detailed => {
                 // Build CSV header dynamically based on selected columns
                 let mut headers = Vec::new();
-                if columns.show_filename { headers.push("Name"); }
+                if columns.show_filename { headers.push("File Name"); }
                 if columns.show_path { headers.push("Path"); }
-                if columns.show_path_name { headers.push("Full Path"); }
+                if columns.show_path_name { headers.push("Path + Name"); }
                 if columns.show_size { headers.push("Size (bytes)"); }
                 if columns.show_created { headers.push("Created"); }
                 if columns.show_modified { headers.push("Modified"); }
