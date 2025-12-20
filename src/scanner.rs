@@ -193,6 +193,14 @@ impl DirectoryScanner {
             walker = walker.max_depth(depth);
         }
         
+        // Report enumeration start
+        if let Some(ref callback) = progress_callback {
+            callback(-1.0, "Enumerating files...".to_string());
+        }
+        
+        // Counter for enumeration progress reporting
+        let enumerated_count = Arc::new(AtomicUsize::new(0));
+        
         // Collect all file paths first (sequential traversal)
         let files: Vec<_> = walker
             .into_iter()
@@ -230,6 +238,15 @@ impl DirectoryScanner {
                         return false;
                     }
                 }
+                
+                // Report enumeration progress periodically (every 500 entries)
+                if let Some(ref callback) = progress_callback {
+                    let count = enumerated_count.fetch_add(1, Ordering::Relaxed) + 1;
+                    if count % 500 == 0 {
+                        callback(-1.0, format!("Enumerating: {} entries scanned...", count));
+                    }
+                }
+                
                 e.file_type().is_file()
             })
             .filter(|e| self.should_include_entry(e.path(), &mount_info))
@@ -244,10 +261,16 @@ impl DirectoryScanner {
         
         let total_files = files.len();
         
-        if total_files == 0 {
-            if let Some(ref callback) = progress_callback {
+        // Report enumeration complete, transition to processing phase
+        if let Some(ref callback) = progress_callback {
+            if total_files == 0 {
                 callback(1.0, "No files found".to_string());
+            } else {
+                callback(0.0, format!("Found {} files, starting processing...", total_files));
             }
+        }
+        
+        if total_files == 0 {
             return Ok(Vec::new());
         }
         
@@ -439,10 +462,26 @@ impl DirectoryScanner {
             walker = walker.max_depth(depth);
         }
         
+        // Report enumeration start
+        if let Some(ref callback) = progress_callback {
+            callback(-1.0, "Enumerating entries...".to_string());
+        }
+        
+        let mut enumerated_count = 0usize;
+        
         let entries: Vec<_> = walker
             .into_iter()
             .filter_map(|e| match e {
-                Ok(entry) => Some(entry),
+                Ok(entry) => {
+                    // Report enumeration progress periodically
+                    enumerated_count += 1;
+                    if enumerated_count % 500 == 0 {
+                        if let Some(ref callback) = progress_callback {
+                            callback(-1.0, format!("Enumerating: {} entries scanned...", enumerated_count));
+                        }
+                    }
+                    Some(entry)
+                }
                 Err(err) => {
                     if let Some(path) = err.path() {
                         if err.io_error()
@@ -466,6 +505,11 @@ impl DirectoryScanner {
             })
             .collect();
         let total = entries.len();
+        
+        // Report enumeration complete
+        if let Some(ref callback) = progress_callback {
+            callback(0.0, format!("Found {} entries, analyzing...", total));
+        }
         
         for (i, entry) in entries.iter().enumerate() {
             // Check cancellation
