@@ -312,8 +312,16 @@ impl DirectoryScanner {
                     }
                 }
                 
-                // Process the file
-                let result = process_file_with_hash_options(path, calculate_sha256, calculate_sha512, calculate_md5, calculate_format, calculate_mime);
+                // Process the file with cancellation support for hash computation
+                let result = process_file_with_hash_options_cancellable(
+                    path, 
+                    calculate_sha256, 
+                    calculate_sha512, 
+                    calculate_md5, 
+                    calculate_format, 
+                    calculate_mime,
+                    cancellation_flag.as_ref()
+                );
                 
                 // Update progress (with throttling to avoid callback spam)
                 if let Some(ref callback) = progress_callback {
@@ -333,7 +341,10 @@ impl DirectoryScanner {
                         Some(info)
                     }
                     Err(e) => {
-                        if e.kind() == io::ErrorKind::PermissionDenied {
+                        if e.kind() == io::ErrorKind::Interrupted {
+                            // Cancellation during hash computation - not an error
+                            debug!(path = %path.display(), "File processing cancelled");
+                        } else if e.kind() == io::ErrorKind::PermissionDenied {
                             warn!(
                                 path = %path.display(),
                                 "Permission denied reading file"
@@ -1049,6 +1060,19 @@ pub fn process_file_no_hash(path: &Path) -> io::Result<FileInfo> {
 
 /// Process a file with configurable hash options
 pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calculate_sha512: bool, calculate_md5: bool, calculate_format: bool, calculate_mime: bool) -> io::Result<FileInfo> {
+    process_file_with_hash_options_cancellable(path, calculate_sha256, calculate_sha512, calculate_md5, calculate_format, calculate_mime, None)
+}
+
+/// Process a file with configurable hash options and cancellation support
+pub fn process_file_with_hash_options_cancellable(
+    path: &Path, 
+    calculate_sha256: bool, 
+    calculate_sha512: bool, 
+    calculate_md5: bool, 
+    calculate_format: bool, 
+    calculate_mime: bool,
+    cancellation_flag: Option<&Arc<AtomicBool>>
+) -> io::Result<FileInfo> {
     let metadata = fs::metadata(path)?;
     
     let name = path.file_name()
@@ -1078,7 +1102,7 @@ pub fn process_file_with_hash_options(path: &Path, calculate_sha256: bool, calcu
         .unwrap_or_else(|| "N/A".to_string());
     
     let (md5, sha256, sha512) = if calculate_sha256 || calculate_sha512 || calculate_md5 {
-        calculate_file_hashes(path, calculate_sha256, calculate_sha512, calculate_md5)?
+        calculate_file_hashes_cancellable(path, calculate_sha256, calculate_sha512, calculate_md5, cancellation_flag)?
     } else {
         (String::from("Not calculated"), String::from("Not calculated"), String::from("Not calculated"))
     };
@@ -1147,6 +1171,17 @@ pub fn calculate_md5(path: &Path) -> io::Result<String> {
 
 /// Calculate MD5, SHA256, and SHA512 hashes efficiently in a single pass
 pub fn calculate_file_hashes(path: &Path, calc_sha256: bool, calc_sha512: bool, calc_md5: bool) -> io::Result<(String, String, String)> {
+    calculate_file_hashes_cancellable(path, calc_sha256, calc_sha512, calc_md5, None)
+}
+
+/// Calculate MD5, SHA256, and SHA512 hashes with optional cancellation support
+pub fn calculate_file_hashes_cancellable(
+    path: &Path, 
+    calc_sha256: bool, 
+    calc_sha512: bool, 
+    calc_md5: bool,
+    cancellation_flag: Option<&Arc<AtomicBool>>
+) -> io::Result<(String, String, String)> {
     if !calc_sha256 && !calc_sha512 && !calc_md5 {
         return Ok((String::from("Not calculated"), String::from("Not calculated"), String::from("Not calculated")));
     }
@@ -1158,6 +1193,13 @@ pub fn calculate_file_hashes(path: &Path, calc_sha256: bool, calc_sha512: bool, 
     let mut buffer = [0; 8192];
     
     loop {
+        // Check cancellation before each read
+        if let Some(flag) = cancellation_flag {
+            if flag.load(Ordering::Relaxed) {
+                return Err(io::Error::new(io::ErrorKind::Interrupted, "Operation cancelled"));
+            }
+        }
+        
         let bytes_read = file.read(&mut buffer)?;
         if bytes_read == 0 {
             break;

@@ -70,7 +70,7 @@ The **Traversal Options** control which types of files should be included in the
 - **Skip virtual filesystems** is checked by default, and skips specific locations including ``/proc``, ``/run``, ``/sys``, and ``/tmp`` on Linux if you happen to be scanning a live file system from the ``/`` root directory, or ``devfs`` and ``autofs`` mounts on macOS.
 - **Stay on same filesystem** is unchecked by default, but can be checked to restrict the scan from switching filesystems (for example, in Linux if a directory contains multiple mount locations for different filesystems).
 
-Splendir will distribute work among all available CPU cores to provide maximum performance when running long scans (for example, computing MD5 or SHA hashes for many files). Terminate a long-running scan by clicking **Cancel** at any time. The scan will be shut down once the most recent batch of 10 files has completed. Clicking **Exit** during a scan will also trigger a cancellation.
+Splendir will distribute work among all available CPU cores to provide maximum performance when running long scans (for example, computing MD5 or SHA hashes for many files). Terminate a long-running scan by clicking **Cancel** at any time. Clicking **Exit** during a scan will also trigger a cancellation.
 
 ![Splendir Directory Listing View](assets/sds-dirview.png)
 

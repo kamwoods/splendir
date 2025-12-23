@@ -1111,9 +1111,8 @@ fn view_progress(state: &SplendirGui) -> Element<'_, Message> {
     if state.scan_progress < 0.0 {
         // Show pulsing/indeterminate indicator for enumeration phase
         column![
-            text(&state.scan_status).size(18),
-            // Use a subtle animation hint - progress bar at 0 with status text
             progress_bar(0.0..=1.0, 0.0),
+            text(&state.scan_status).size(18),
             text("Scanning directory structure...")
                 .size(12)
                 .color(iced::Color::from_rgb(0.6, 0.6, 0.6)),
@@ -1122,8 +1121,8 @@ fn view_progress(state: &SplendirGui) -> Element<'_, Message> {
         .into()
     } else {
         column![
-            text(&state.scan_status).size(18),
             progress_bar(0.0..=1.0, state.scan_progress),
+            text(&state.scan_status).size(18),
         ]
         .spacing(10)
         .into()
