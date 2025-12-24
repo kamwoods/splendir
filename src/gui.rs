@@ -1194,7 +1194,7 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     let file_count_text = text(format!("Total files: {}", total_files)).size(14);
     
     // Calculate actual widths based on content when expanded
-    let (filename_width, path_width, fullpath_width, standard_width, size_width, md5_width, sha256_width, sha512_width) = if state.columns_expanded {
+    let (filename_width, path_width, fullpath_width, standard_width, size_width, format_width, mime_width, md5_width, sha256_width, sha512_width) = if state.columns_expanded {
         let max_filename_len = state.scan_results.detailed_files.iter()
             .map(|f| f.name.chars().count())
             .max()
@@ -1207,6 +1207,14 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
             .map(|f| f.full_path.chars().count())
             .max()
             .unwrap_or(30);
+        let max_format_len = state.scan_results.detailed_files.iter()
+            .map(|f| f.format.chars().count())
+            .max()
+            .unwrap_or(10);
+        let max_mime_len = state.scan_results.detailed_files.iter()
+            .map(|f| f.mime_type.chars().count())
+            .max()
+            .unwrap_or(20);
         
         // Character width and padding
         // Using 8.0 instead of 7.0 to account for wider characters and ensure no truncation
@@ -1218,13 +1226,15 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         let fp_width = Length::Fixed((max_fullpath_len as f32 * char_width + padding).max(250.0));
         let std_width = Length::Fixed(200.0);
         let sz_width = Length::Fixed(100.0);
+        let fmt_width = Length::Fixed((max_format_len as f32 * char_width + padding).max(150.0));
+        let mime_w = Length::Fixed((max_mime_len as f32 * char_width + padding).max(200.0));
         
         // Hash widths: MD5=32 chars, SHA256=64 chars, SHA512=128 chars
         let md5_w = Length::Fixed(32.0 * char_width + padding);
         let sha256_w = Length::Fixed(64.0 * char_width + padding);
         let sha512_w = Length::Fixed(128.0 * char_width + padding);
         
-        (fn_width, p_width, fp_width, std_width, sz_width, md5_w, sha256_w, sha512_w)
+        (fn_width, p_width, fp_width, std_width, sz_width, fmt_width, mime_w, md5_w, sha256_w, sha512_w)
     } else {
         (
             Length::FillPortion(2),
@@ -1232,6 +1242,8 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
             Length::FillPortion(3),
             Length::FillPortion(2),
             Length::FillPortion(1),
+            Length::FillPortion(2),  // format_width (collapsed)
+            Length::FillPortion(2),  // mime_width (collapsed)
             Length::FillPortion(2),  // md5_width (collapsed)
             Length::FillPortion(2),  // sha256_width (collapsed)
             Length::FillPortion(2),  // sha512_width (collapsed)
@@ -1286,13 +1298,13 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
     if state.show_format {
         header_row = header_row.push(
             container(text("Format").size(15).wrapping(Wrapping::None))
-                .width(standard_width).clip(true)
+                .width(format_width).clip(true)
         );
     }
     if state.calculate_mime {
         header_row = header_row.push(
             container(text("Media Type").size(15).wrapping(Wrapping::None))
-                .width(standard_width).clip(true)
+                .width(mime_width).clip(true)
         );
     }
     if state.calculate_md5 {
@@ -1329,8 +1341,8 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
         if state.show_created { if let Length::Fixed(w) = standard_width { width += w; } }
         if state.show_modified { if let Length::Fixed(w) = standard_width { width += w; } }
         if state.show_accessed { if let Length::Fixed(w) = standard_width { width += w; } }
-        if state.show_format { if let Length::Fixed(w) = standard_width { width += w; } }
-        if state.calculate_mime { if let Length::Fixed(w) = standard_width { width += w; } }
+        if state.show_format { if let Length::Fixed(w) = format_width { width += w; } }
+        if state.calculate_mime { if let Length::Fixed(w) = mime_width { width += w; } }
         if state.calculate_md5 { if let Length::Fixed(w) = md5_width { width += w; } }
         if state.calculate_sha256 { if let Length::Fixed(w) = sha256_width { width += w; } }
         if state.calculate_sha512 { if let Length::Fixed(w) = sha512_width { width += w; } }
@@ -1414,13 +1426,13 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                 if state.show_format {
                     data_row = data_row.push(
                         container(text(&file.format).size(14).wrapping(Wrapping::None))
-                            .width(standard_width).clip(true)
+                            .width(format_width).clip(true)
                     );
                 }
                 if state.calculate_mime {
                     data_row = data_row.push(
                         container(text(&file.mime_type).size(14).wrapping(Wrapping::None))
-                            .width(standard_width).clip(true)
+                            .width(mime_width).clip(true)
                     );
                 }
                 if state.calculate_md5 {
@@ -1546,13 +1558,13 @@ fn view_detailed_results_virtual(state: &SplendirGui) -> Element<'_, Message> {
                 if state.show_format {
                     data_row = data_row.push(
                         container(text(&file.format).size(14).wrapping(Wrapping::None))
-                            .width(standard_width).clip(true)
+                            .width(format_width).clip(true)
                     );
                 }
                 if state.calculate_mime {
                     data_row = data_row.push(
                         container(text(&file.mime_type).size(14).wrapping(Wrapping::None))
-                            .width(standard_width).clip(true)
+                            .width(mime_width).clip(true)
                     );
                 }
                 if state.calculate_md5 {
