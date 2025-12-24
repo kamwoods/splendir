@@ -64,6 +64,7 @@ impl std::fmt::Display for ScanMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ScanPreset {
     Default,
+    DefaultFormats,
     DefaultMD5,
     DefaultSHA256,
     DefaultSHA512,
@@ -72,8 +73,9 @@ enum ScanPreset {
 }
 
 impl ScanPreset {
-    const ALL: [ScanPreset; 6] = [
+    const ALL: [ScanPreset; 7] = [
         ScanPreset::Default,
+        ScanPreset::DefaultFormats,
         ScanPreset::DefaultMD5,
         ScanPreset::DefaultSHA256,
         ScanPreset::DefaultSHA512,
@@ -86,6 +88,7 @@ impl std::fmt::Display for ScanPreset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ScanPreset::Default => write!(f, "Default"),
+            ScanPreset::DefaultFormats => write!(f, "Default+Formats"),
             ScanPreset::DefaultMD5 => write!(f, "Default+MD5"),
             ScanPreset::DefaultSHA256 => write!(f, "Default+SHA256"),
             ScanPreset::DefaultSHA512 => write!(f, "Default+SHA512"),
@@ -470,6 +473,26 @@ fn update(state: &mut SplendirGui, message: Message) -> Task<Message> {
                     state.show_format = false;
                     state.calculate_format = false;
                     state.calculate_mime = false;
+                }
+                ScanPreset::DefaultFormats => {
+                    state.include_dotfiles = false;
+                    state.follow_symlinks = false;
+                    state.calculate_md5 = false;
+                    state.calculate_sha256 = false;
+                    state.calculate_sha512 = false;
+                    state.max_depth = String::new();
+                    state.colorize_output = false;
+                    // Default+Formats: File Name, Path, Size, Modified, Format, Media Type
+                    state.show_filename = true;
+                    state.show_path = true;
+                    state.show_path_name = false;
+                    state.show_size = true;
+                    state.show_created = false;
+                    state.show_modified = true;
+                    state.show_accessed = false;
+                    state.show_format = true;
+                    state.calculate_format = true;
+                    state.calculate_mime = true;
                 }
                 ScanPreset::DefaultMD5 => {
                     state.include_dotfiles = false;
